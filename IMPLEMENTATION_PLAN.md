@@ -44,7 +44,7 @@ Build a web interface for the C++ Rubik's Cube solver with manual color input, w
 
 | Task | Status |
 |------|--------|
-| Push to GitHub | ⬜ Todo |
+| Push to GitHub | ✅ Done |
 | Deploy frontend to Vercel (root dir: `web/`) | ⬜ Todo |
 | Deploy backend to Render (Docker, context: repo root) | ⬜ Todo |
 | Set `RENDER_API_URL` env var on Vercel | ⬜ Todo |

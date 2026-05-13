@@ -58,6 +58,10 @@ public:
         }
     }
 
+    void setColor(FACE face, unsigned row, unsigned col, COLOR color) override {
+        cube[getIndex((int)face, (int)row, (int)col)] = getColorLetter(color);
+    }
+
     bool isSolved() const override {
         for (int i = 0; i < 6; i++) {
             for (int j = 0; j < 3; j++) {

@@ -54,6 +54,8 @@ public:
      */
     virtual COLOR getColor(FACE face, unsigned row, unsigned col) const = 0;
 
+    virtual void setColor(FACE face, unsigned row, unsigned col, COLOR color) = 0;
+
     /*
      * Returns the first letter of the given COLOR
      * Eg: For COLOR::GREEN, it returns 'G'

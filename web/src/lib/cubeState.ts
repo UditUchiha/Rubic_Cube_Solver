@@ -237,7 +237,7 @@ export function applyMove(state: CubeState, move: string): CubeState {
       for (let i = 0; i < 3; i++) set(4, 0, 2 - i, g(1, 0, 2 - i));
       for (let i = 0; i < 3; i++) set(1, 0, 2 - i, g(2, 0, 2 - i));
       for (let i = 0; i < 3; i++) set(2, 0, 2 - i, g(3, 0, 2 - i));
-      for (let i = 0; i < 3; i++) set(3, 0, 2 - i, tmp[2 - i]);
+      for (let i = 0; i < 3; i++) set(3, 0, 2 - i, tmp[i]);
       break;
     }
     case "U'": {
@@ -281,7 +281,7 @@ export function applyMove(state: CubeState, move: string): CubeState {
       for (let i = 0; i < 3; i++) set(0, 2 - i, 2, g(2, 2 - i, 2));
       for (let i = 0; i < 3; i++) set(2, 2 - i, 2, g(5, 2 - i, 2));
       for (let i = 0; i < 3; i++) set(5, 2 - i, 2, g(4, i, 0));
-      for (let i = 0; i < 3; i++) set(4, i, 0, tmp[2 - i]);
+      for (let i = 0; i < 3; i++) set(4, i, 0, tmp[i]);
       break;
     }
     case "R'": { applyMove3(s, 'R'); break; }
@@ -295,7 +295,7 @@ export function applyMove(state: CubeState, move: string): CubeState {
       for (let i = 0; i < 3; i++) set(0, 0, 2 - i, g(3, 2 - i, 2));
       for (let i = 0; i < 3; i++) set(3, 2 - i, 2, g(5, 2, i));
       for (let i = 0; i < 3; i++) set(5, 2, i, g(1, i, 0));
-      for (let i = 0; i < 3; i++) set(1, i, 0, tmp[2 - i]);
+      for (let i = 0; i < 3; i++) set(1, i, 0, tmp[i]);
       break;
     }
     case "B'": { applyMove3(s, 'B'); break; }

@@ -13,7 +13,8 @@ COPY PatternDatabases/ PatternDatabases/
 COPY Solver/ Solver/
 
 RUN cmake -B out -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build out --target solver_api --config Release
+    cmake --build out --target solver_api --config Release && \
+    strip out/solver_api
 
 # Stage 2: Node.js runtime
 FROM node:20-slim

@@ -35,3 +35,8 @@ add_executable(rubiks_cube_solver
 add_executable(solver_api
         solver_api.cpp
         ${COMMON_SOURCES})
+
+# Statically link libstdc++ and libgcc so the binary has no runtime
+# dependency on the host's libstdc++ version (fixes GLIBCXX_3.4.32 error
+# when running a GCC-13-built binary inside node:20-slim).
+target_link_options(solver_api PRIVATE -static-libstdc++ -static-libgcc)

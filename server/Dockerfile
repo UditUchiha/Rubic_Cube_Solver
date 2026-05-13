@@ -25,8 +25,8 @@ RUN chmod +x ./solver_api
 
 COPY Databases/cornerDepth5V1.txt ./Databases/cornerDepth5V1.txt
 
-COPY server/package.json server/index.js ./
-RUN npm ci --production
+COPY server/package.json server/package-lock.json* server/index.js ./
+RUN npm ci --omit=dev || npm install --omit=dev
 
 ENV SOLVER_PATH=/app/solver_api
 ENV DB_PATH=/app/Databases/cornerDepth5V1.txt

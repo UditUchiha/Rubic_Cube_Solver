@@ -1,7 +1,7 @@
 'use client';
 
 import { CubeState, computeCubeStates } from '@/lib/cubeState';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import RubiksCube3D from './RubiksCube3D';
 
@@ -10,34 +10,45 @@ interface Props {
   moves: string[];
 }
 
+const SPEEDS = [
+  { label: 'Slow', ms: 800 },
+  { label: 'Normal', ms: 400 },
+  { label: 'Fast', ms: 180 },
+];
+
 export default function SolutionPlayer({ initialState, moves }: Props) {
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [animatingMove, setAnimatingMove] = useState<string | null>(null);
+  const [speed, setSpeed] = useState(400);
 
   const cubeStates = computeCubeStates(initialState, moves);
 
+  // Reset when a new solution arrives
   useEffect(() => {
     setStep(0);
     setPlaying(false);
+    setAnimatingMove(null);
   }, [moves]);
 
+  // Auto-advance: when playing and no animation in flight, trigger next move
   useEffect(() => {
-    if (playing) {
-      intervalRef.current = setInterval(() => {
-        setStep((s) => {
-          if (s >= moves.length) {
-            setPlaying(false);
-            return s;
-          }
-          return s + 1;
-        });
-      }, 800);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [playing, moves.length]);
+    if (!playing || animatingMove !== null) return;
+    if (step >= moves.length) { setPlaying(false); return; }
+    const t = setTimeout(() => setAnimatingMove(moves[step]), 80);
+    return () => clearTimeout(t);
+  }, [playing, animatingMove, step, moves]);
+
+  function handleMoveComplete() {
+    setAnimatingMove(null);
+    setStep((s) => s + 1);
+  }
+
+  function jumpTo(target: number) {
+    setAnimatingMove(null);
+    setPlaying(false);
+    setStep(Math.max(0, Math.min(moves.length, target)));
+  }
 
   const currentState = cubeStates[step];
 
@@ -45,7 +56,13 @@ export default function SolutionPlayer({ initialState, moves }: Props) {
     <div className="flex flex-col gap-4">
       {/* 3D Cube */}
       <div className="flex justify-center">
-        <RubiksCube3D state={currentState} size={160} />
+        <RubiksCube3D
+          state={currentState}
+          size={160}
+          move={animatingMove}
+          animDuration={speed}
+          onMoveComplete={handleMoveComplete}
+        />
       </div>
 
       {/* Step counter */}
@@ -68,12 +85,12 @@ export default function SolutionPlayer({ initialState, moves }: Props) {
       {/* Controls */}
       <div className="flex justify-center items-center gap-3">
         <button
-          onClick={() => { setStep(0); setPlaying(false); }}
+          onClick={() => jumpTo(0)}
           className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm"
           title="Reset"
         >⏮</button>
         <button
-          onClick={() => setStep((s) => Math.max(0, s - 1))}
+          onClick={() => jumpTo(step - 1)}
           disabled={step === 0}
           className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm disabled:opacity-40"
         >‹</button>
@@ -85,33 +102,53 @@ export default function SolutionPlayer({ initialState, moves }: Props) {
           {playing ? '⏸' : '▶'}
         </button>
         <button
-          onClick={() => setStep((s) => Math.min(moves.length, s + 1))}
-          disabled={step === moves.length}
+          onClick={() => {
+            if (!animatingMove) setAnimatingMove(moves[step]);
+          }}
+          disabled={step === moves.length || !!animatingMove || playing}
           className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm disabled:opacity-40"
         >›</button>
         <button
-          onClick={() => { setStep(moves.length); setPlaying(false); }}
+          onClick={() => jumpTo(moves.length)}
           className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm"
           title="Skip to end"
         >⏭</button>
       </div>
 
+      {/* Speed selector */}
+      <div className="flex justify-center gap-2">
+        {SPEEDS.map(({ label, ms }) => (
+          <button
+            key={label}
+            onClick={() => setSpeed(ms)}
+            className={clsx(
+              'px-3 py-1 rounded text-xs transition-colors',
+              speed === ms
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-white'
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Move badges */}
       <div className="flex flex-wrap gap-1.5 justify-center max-h-28 overflow-y-auto">
-        {moves.map((move, i) => (
+        {moves.map((m, i) => (
           <button
             key={i}
-            onClick={() => { setStep(i + 1); setPlaying(false); }}
+            onClick={() => jumpTo(i + 1)}
             className={clsx(
               'px-2.5 py-1 rounded text-sm font-mono font-medium border transition-all',
               i < step
                 ? 'bg-green-900/50 border-green-700 text-green-300'
                 : i === step
                 ? 'bg-indigo-600 border-indigo-400 text-white scale-110 shadow-md'
-                : 'bg-gray-800 border-gray-600 text-gray-300 hover:border-gray-400'
+                : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-white/5 hover:border-gray-400'
             )}
           >
-            {move}
+            {m}
           </button>
         ))}
       </div>

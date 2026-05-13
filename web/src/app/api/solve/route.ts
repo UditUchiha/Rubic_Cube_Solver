@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const maxDuration = 90; // Increase Vercel timeout to 60s
+
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
 

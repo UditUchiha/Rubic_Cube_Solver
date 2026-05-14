@@ -6,7 +6,7 @@ import ManualColorPicker from '@/components/ManualColorPicker';
 import SolutionPlayer from '@/components/SolutionPlayer';
 import WebcamScanner from '@/components/WebcamScanner';
 import ImageUpload from '@/components/ImageUpload';
-import { CubeState, createSolvedState, serialize, validate, generateScramble } from '@/lib/cubeState';
+import { CubeState, createSolvedState, serialize, validate, generateScramble, isSolved } from '@/lib/cubeState';
 
 type SolveStatus = 'idle' | 'loading' | 'solved' | 'error';
 type InputTab = 'manual' | 'camera' | 'upload';
@@ -53,7 +53,8 @@ export default function SolvePage() {
   function handleStateChange(next: CubeState) {
     setCubeState(next);
     setValidationErrors([]);
-    if (solveStatus === 'error') setSolveStatus('idle');
+    setSolveStatus('idle');
+    setSolution([]);
   }
 
   function handleShuffle() {
@@ -73,6 +74,13 @@ export default function SolvePage() {
     const { valid, errors } = validate(cubeState);
     if (!valid) {
       setValidationErrors(errors);
+      return;
+    }
+    
+    // Check if already solved
+    if (isSolved(cubeState)) {
+      setSolution([]);
+      setSolveStatus('solved');
       return;
     }
     setValidationErrors([]);

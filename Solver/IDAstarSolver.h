@@ -26,10 +26,21 @@ private:
         for (int i = 0; i < 18; i++) {
             auto curr_move = RubiksCube::MOVE(i);
             
-            // Optimization: avoid consecutive moves on the same face
+            // Optimization: avoid consecutive moves on the same face,
+            // and enforce ordering for opposite faces (e.g., L R is allowed, R L is pruned)
             if (!moves.empty()) {
                 auto last_move = moves.back();
-                if (i / 3 == (int)last_move / 3) continue;
+                int current_face = i / 3;
+                int last_face = (int)last_move / 3;
+                
+                // Same face? Prune.
+                if (current_face == last_face) continue;
+                
+                // Opposite faces? (L=0/R=1, U=2/D=3, F=4/B=5)
+                // If they are opposite, only allow if last_face < current_face.
+                if ((current_face / 2) == (last_face / 2)) {
+                    if (current_face < last_face) continue;
+                }
             }
 
             cube.move(curr_move);

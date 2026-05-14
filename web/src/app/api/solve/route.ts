@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data, { status: upstream.status });
   } catch (err: unknown) {
     if (err instanceof Error && err.name === 'AbortError') {
-      return NextResponse.json({ success: false, error: 'Solver timed out (60s)' }, { status: 408 });
+      return NextResponse.json({ success: false, error: 'Solver timed out (120s)' }, { status: 408 });
     }
     return NextResponse.json({ success: false, error: 'Cannot reach solver server' }, { status: 503 });
   }

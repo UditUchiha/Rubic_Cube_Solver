@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { solveCube } from '@/lib/solver';
+import { deserialize } from '@/lib/cubeState';
 
 export const maxDuration = 300; // Vercel max; actual limit is the 120s internal solver timeout
-
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -19,6 +20,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // --- NEW APPROACH: Pure JS Kociemba Solver (No external backend needed) ---
+  try {
+    const stateArray = deserialize(cubeState);
+    if (!stateArray) throw new Error('Invalid cube state string');
+    
+    const solution = solveCube(stateArray);
+    return NextResponse.json({ success: true, solution });
+  } catch (err: unknown) {
+    console.error('Kociemba solver error:', err);
+    // If Kociemba fails, we can either return error or fall back to the old C++ approach below
+    return NextResponse.json(
+      { success: false, error: err instanceof Error ? err.message : 'Solver error' },
+      { status: 500 }
+    );
+  }
+
+  /* 
+  // --- PREVIOUS APPROACH: C++ IDA* Backend (External Render instance) ---
   const backendUrl = process.env.RENDER_API_URL;
   if (!backendUrl) {
     return NextResponse.json(
@@ -47,4 +66,5 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ success: false, error: 'Cannot reach solver server' }, { status: 503 });
   }
+  */
 }

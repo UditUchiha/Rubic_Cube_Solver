@@ -1,7 +1,10 @@
 'use client';
 
-import { CubeState, Color, Face, COLOR_HEX, createSolvedState, idx } from '@/lib/cubeState';
-import { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
+import * as THREE from 'three';
+import { CubeState, COLOR_HEX, createSolvedState } from '@/lib/cubeState';
 
 interface Props {
   state?: CubeState;
@@ -12,240 +15,215 @@ interface Props {
   onMoveComplete?: () => void;
 }
 
-// Face transforms: position each of the 6 faces in 3D
-const FACE_TRANSFORMS = [
-  'rotateX(90deg) translateZ(var(--half))',   // UP
-  'rotateY(-90deg) translateZ(var(--half))',  // LEFT
-  'translateZ(var(--half))',                   // FRONT
-  'rotateY(90deg) translateZ(var(--half))',   // RIGHT
-  'rotateY(180deg) translateZ(var(--half))',  // BACK
-  'rotateX(-90deg) translateZ(var(--half))',  // DOWN
+// Map internal color indices to hex
+const FACE_COLORS = [
+  COLOR_HEX[0], // U: White
+  COLOR_HEX[1], // L: Green
+  COLOR_HEX[2], // F: Red
+  COLOR_HEX[3], // R: Blue
+  COLOR_HEX[4], // B: Orange
+  COLOR_HEX[5], // D: Yellow
 ];
 
-// BACK face stickers appear mirrored; reverse columns to compensate
-const FACE_MIRROR = [false, false, false, false, true, false];
+/**
+ * Sticker component: a small plane positioned on one of the 6 faces of a cubie.
+ */
+function Sticker({ color, position, rotation }: { color: string; position: [number, number, number]; rotation: [number, number, number] }) {
+  return (
+    <mesh position={position} rotation={rotation}>
+      <planeGeometry args={[0.85, 0.85]} />
+      <meshStandardMaterial color={color} roughness={0.1} metalness={0.1} side={THREE.DoubleSide} />
+    </mesh>
+  );
+}
 
-// Pre-rotation for each move (applied in scene space before face's own transform)
-const MOVE_ANIM: Record<string, { faceIdx: number; axis: 'X' | 'Y' | 'Z'; targetAngle: number }> = {
-  'U':  { faceIdx: 0, axis: 'Y', targetAngle:   90 },
-  "U'": { faceIdx: 0, axis: 'Y', targetAngle:  -90 },
-  'U2': { faceIdx: 0, axis: 'Y', targetAngle:  180 },
-  'L':  { faceIdx: 1, axis: 'X', targetAngle:  -90 },
-  "L'": { faceIdx: 1, axis: 'X', targetAngle:   90 },
-  'L2': { faceIdx: 1, axis: 'X', targetAngle:  180 },
-  'F':  { faceIdx: 2, axis: 'Z', targetAngle:   90 },
-  "F'": { faceIdx: 2, axis: 'Z', targetAngle:  -90 },
-  'F2': { faceIdx: 2, axis: 'Z', targetAngle:  180 },
-  'R':  { faceIdx: 3, axis: 'X', targetAngle:   90 },
-  "R'": { faceIdx: 3, axis: 'X', targetAngle:  -90 },
-  'R2': { faceIdx: 3, axis: 'X', targetAngle:  180 },
-  'B':  { faceIdx: 4, axis: 'Z', targetAngle:  -90 },
-  "B'": { faceIdx: 4, axis: 'Z', targetAngle:   90 },
-  'B2': { faceIdx: 4, axis: 'Z', targetAngle:  180 },
-  'D':  { faceIdx: 5, axis: 'Y', targetAngle:  -90 },
-  "D'": { faceIdx: 5, axis: 'Y', targetAngle:   90 },
-  'D2': { faceIdx: 5, axis: 'Y', targetAngle:  180 },
-};
+/**
+ * Single Cubie component (one of the 27 blocks).
+ */
+function Cubie({ x, y, z, state }: { x: number; y: number; z: number; state: CubeState }) {
+  const stickers = [];
 
-export default function RubiksCube3D({
-  state,
-  size = 150,
-  autoRotate = false,
-  move = null,
-  animDuration = 350,
-  onMoveComplete,
-}: Props) {
-  const cubeState = state ?? createSolvedState();
-  const sceneRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
-  const lastPos = useRef({ x: 0, y: 0 });
-  const rotation = useRef({ x: -25, y: 30 });
-  const animFrameRef = useRef<number | null>(null);
-
-  // Face animation state
-  const [animFace, setAnimFace] = useState<number | null>(null);
-  const [animAngle, setAnimAngle] = useState(0);
-  const [hasTransition, setHasTransition] = useState(false);
-  const prevMoveRef = useRef<string | null>(null);
-
-  const stickerSize = Math.floor(size / 3.8);
-  const gap = Math.floor(stickerSize / 12);
-  const faceSize = stickerSize * 3 + gap * 2;
-  const half = faceSize / 2;
-
-  function applyRotation() {
-    if (sceneRef.current) {
-      sceneRef.current.style.transform =
-        `rotateX(${rotation.current.x}deg) rotateY(${rotation.current.y}deg)`;
-    }
+  // UP face (+Y)
+  if (y === 1) {
+    const r = z + 1, c = x + 1;
+    stickers.push(
+      <Sticker 
+        key="U" 
+        color={FACE_COLORS[state[0 * 9 + r * 3 + c]]} 
+        position={[0, 0.51, 0]} 
+        rotation={[-Math.PI / 2, 0, 0]} 
+      />
+    );
   }
-
-  useEffect(() => {
-    applyRotation();
-    if (!autoRotate) return;
-    let angle = rotation.current.y;
-    function tick() {
-      angle += 0.3;
-      rotation.current.y = angle;
-      applyRotation();
-      animFrameRef.current = requestAnimationFrame(tick);
-    }
-    animFrameRef.current = requestAnimationFrame(tick);
-    return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); };
-  }, [autoRotate]);
-
-  // Trigger face animation when move prop changes
-  useEffect(() => {
-    if (!move || move === prevMoveRef.current) return;
-    prevMoveRef.current = move;
-    const anim = MOVE_ANIM[move];
-    if (!anim) { onMoveComplete?.(); return; }
-
-    setAnimFace(anim.faceIdx);
-    setHasTransition(false);
-    setAnimAngle(0);
-
-    // Double-RAF: first frame sets angle=0, second enables transition + sets target
-    const id = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setHasTransition(true);
-        setAnimAngle(anim.targetAngle);
-      });
-    });
-    return () => cancelAnimationFrame(id);
-  }, [move]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function handleTransitionEnd(faceIdx: number) {
-    if (animFace !== faceIdx) return;
-    // Disable transition first so the angle-reset snap is invisible
-    setHasTransition(false);
-    setAnimAngle(0);
-    setAnimFace(null);
-    prevMoveRef.current = null;
-    onMoveComplete?.();
+  // DOWN face (-Y)
+  if (y === -1) {
+    const r = 1 - z, c = x + 1;
+    stickers.push(
+      <Sticker 
+        key="D" 
+        color={FACE_COLORS[state[5 * 9 + r * 3 + c]]} 
+        position={[0, -0.51, 0]} 
+        rotation={[Math.PI / 2, 0, 0]} 
+      />
+    );
   }
-
-  function onPointerDown(e: React.PointerEvent) {
-    if (autoRotate) return;
-    dragging.current = true;
-    lastPos.current = { x: e.clientX, y: e.clientY };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  // FRONT face (+Z)
+  if (z === 1) {
+    const r = 1 - y, c = x + 1;
+    stickers.push(
+      <Sticker 
+        key="F" 
+        color={FACE_COLORS[state[2 * 9 + r * 3 + c]]} 
+        position={[0, 0, 0.51]} 
+        rotation={[0, 0, 0]} 
+      />
+    );
   }
-
-  function onPointerMove(e: React.PointerEvent) {
-    if (!dragging.current) return;
-    const dx = e.clientX - lastPos.current.x;
-    const dy = e.clientY - lastPos.current.y;
-    rotation.current.y += dx * 0.5;
-    rotation.current.x -= dy * 0.5;
-    rotation.current.x = Math.max(-80, Math.min(80, rotation.current.x));
-    lastPos.current = { x: e.clientX, y: e.clientY };
-    applyRotation();
+  // BACK face (-Z)
+  if (z === -1) {
+    const r = 1 - y, c = 1 - x;
+    stickers.push(
+      <Sticker 
+        key="B" 
+        color={FACE_COLORS[state[4 * 9 + r * 3 + c]]} 
+        position={[0, 0, -0.51]} 
+        rotation={[0, Math.PI, 0]} 
+      />
+    );
   }
-
-  function onPointerUp() { dragging.current = false; }
-
-  function onTouchStart(e: React.TouchEvent) {
-    if (autoRotate || e.touches.length === 0) return;
-    dragging.current = true;
-    lastPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  // LEFT face (-X)
+  if (x === -1) {
+    const r = 1 - y, c = z + 1;
+    stickers.push(
+      <Sticker 
+        key="L" 
+        color={FACE_COLORS[state[1 * 9 + r * 3 + c]]} 
+        position={[-0.51, 0, 0]} 
+        rotation={[0, -Math.PI / 2, 0]} 
+      />
+    );
   }
-
-  function onTouchMove(e: React.TouchEvent) {
-    if (!dragging.current || e.touches.length === 0) return;
-    e.preventDefault();
-    const dx = e.touches[0].clientX - lastPos.current.x;
-    const dy = e.touches[0].clientY - lastPos.current.y;
-    rotation.current.y += dx * 0.5;
-    rotation.current.x -= dy * 0.5;
-    rotation.current.x = Math.max(-80, Math.min(80, rotation.current.x));
-    lastPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    applyRotation();
-  }
-
-  function onTouchEnd() { dragging.current = false; }
-
-  function getFaceTransform(faceIdx: number): string {
-    const base = FACE_TRANSFORMS[faceIdx];
-    if (animFace !== faceIdx || !move) return base;
-    const anim = MOVE_ANIM[move];
-    if (!anim) return base;
-    return `rotate${anim.axis}(${animAngle}deg) ${base}`;
+  // RIGHT face (+X)
+  if (x === 1) {
+    const r = 1 - y, c = 1 - z;
+    stickers.push(
+      <Sticker 
+        key="R" 
+        color={FACE_COLORS[state[3 * 9 + r * 3 + c]]} 
+        position={[0.51, 0, 0]} 
+        rotation={[0, Math.PI / 2, 0]} 
+      />
+    );
   }
 
   return (
-    <div
-      style={{
-        width: faceSize + 40,
-        height: faceSize + 40,
-        perspective: '600px',
-        cursor: autoRotate ? 'default' : 'grab',
-        touchAction: 'none',
-      }}
-      className="flex items-center justify-center select-none"
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
-    >
-      <div
-        ref={sceneRef}
-        style={{
-          width: faceSize,
-          height: faceSize,
-          transformStyle: 'preserve-3d',
-          position: 'relative',
-          ['--half' as string]: `${half}px`,
-        }}
-      >
-        {FACE_TRANSFORMS.map((_, faceIdx) => {
-          const mirror = FACE_MIRROR[faceIdx];
-          const isAnimatingFace = animFace === faceIdx;
-          return (
-            <div
-              key={faceIdx}
-              style={{
-                position: 'absolute',
-                width: faceSize,
-                height: faceSize,
-                transform: getFaceTransform(faceIdx),
-                transition: isAnimatingFace && hasTransition
-                  ? `transform ${animDuration}ms ease`
-                  : 'none',
-                transformStyle: 'preserve-3d',
-                display: 'grid',
-                gridTemplateColumns: `repeat(3, ${stickerSize}px)`,
-                gap: `${gap}px`,
-                padding: `${gap}px`,
-                backgroundColor: '#111',
-                borderRadius: 4,
-                backfaceVisibility: 'hidden',
-              }}
-              onTransitionEnd={() => handleTransitionEnd(faceIdx)}
-            >
-              {Array.from({ length: 9 }, (_, i) => {
-                const row = Math.floor(i / 3);
-                const col = mirror ? 2 - (i % 3) : i % 3;
-                const color: Color = cubeState[idx(faceIdx as Face, row, col)];
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      width: stickerSize,
-                      height: stickerSize,
-                      backgroundColor: COLOR_HEX[color],
-                      borderRadius: 3,
-                      boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.3)',
-                    }}
-                  />
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
+    <group position={[x * 1.05, y * 1.05, z * 1.05]}>
+      {/* The black plastic "core" of the cubie */}
+      <mesh>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color="#050505" roughness={0.5} />
+      </mesh>
+      {stickers}
+    </group>
+  );
+}
+
+const MOVE_DEFS: Record<string, { axis: 'x' | 'y' | 'z'; angle: number; filter: (x: number, y: number, z: number) => boolean }> = {
+  'U':  { axis: 'y', angle: -Math.PI / 2, filter: (x, y, z) => y === 1 },
+  "U'": { axis: 'y', angle:  Math.PI / 2, filter: (x, y, z) => y === 1 },
+  'U2': { axis: 'y', angle: -Math.PI,     filter: (x, y, z) => y === 1 },
+  'D':  { axis: 'y', angle:  Math.PI / 2, filter: (x, y, z) => y === -1 },
+  "D'": { axis: 'y', angle: -Math.PI / 2, filter: (x, y, z) => y === -1 },
+  'D2': { axis: 'y', angle:  Math.PI,     filter: (x, y, z) => y === -1 },
+  'R':  { axis: 'x', angle: -Math.PI / 2, filter: (x, y, z) => x === 1 },
+  "R'": { axis: 'x', angle:  Math.PI / 2, filter: (x, y, z) => x === 1 },
+  'R2': { axis: 'x', angle: -Math.PI,     filter: (x, y, z) => x === 1 },
+  'L':  { axis: 'x', angle:  Math.PI / 2, filter: (x, y, z) => x === -1 },
+  "L'": { axis: 'x', angle: -Math.PI / 2, filter: (x, y, z) => x === -1 },
+  'L2': { axis: 'x', angle:  Math.PI,     filter: (x, y, z) => x === -1 },
+  'F':  { axis: 'z', angle: -Math.PI / 2, filter: (x, y, z) => z === 1 },
+  "F'": { axis: 'z', angle:  Math.PI / 2, filter: (x, y, z) => z === 1 },
+  'F2': { axis: 'z', angle: -Math.PI,     filter: (x, y, z) => z === 1 },
+  'B':  { axis: 'z', angle:  Math.PI / 2, filter: (x, y, z) => z === -1 },
+  "B'": { axis: 'z', angle: -Math.PI / 2, filter: (x, y, z) => z === -1 },
+  'B2': { axis: 'z', angle:  Math.PI,     filter: (x, y, z) => z === -1 },
+};
+
+function CubeContent({ state, move, animDuration, onMoveComplete }: { state: CubeState; move: string | null; animDuration: number; onMoveComplete: () => void }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const [animStart, setAnimStart] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (move && MOVE_DEFS[move]) {
+      setAnimStart(performance.now());
+    } else {
+      setAnimStart(null);
+      if (groupRef.current) groupRef.current.rotation.set(0, 0, 0);
+    }
+  }, [move]);
+
+  useFrame(() => {
+    if (animStart !== null && move && groupRef.current) {
+      const def = MOVE_DEFS[move];
+      const elapsed = performance.now() - animStart;
+      const progress = Math.min(elapsed / animDuration, 1.0);
+      const eased = 1 - Math.pow(1 - progress, 3); // Cubic out
+      
+      groupRef.current.rotation.set(0, 0, 0);
+      groupRef.current.rotation[def.axis] = def.angle * eased;
+
+      if (progress >= 1.0) {
+        setAnimStart(null);
+        onMoveComplete();
+      }
+    }
+  });
+
+  const cubies = [];
+  const def = move ? MOVE_DEFS[move] : null;
+
+  for (let x = -1; x <= 1; x++) {
+    for (let y = -1; y <= 1; y++) {
+      for (let z = -1; z <= 1; z++) {
+        if (x === 0 && y === 0 && z === 0) continue;
+        const animated = !!(def && def.filter(x, y, z));
+        const cubie = <Cubie key={`${x}${y}${z}`} x={x} y={y} z={z} state={state} />;
+        cubies.push({ animated, cubie });
+      }
+    }
+  }
+
+  return (
+    <group>
+      <group ref={groupRef}>
+        {cubies.filter(c => c.animated).map(c => c.cubie)}
+      </group>
+      <group>
+        {cubies.filter(c => !c.animated).map(c => c.cubie)}
+      </group>
+    </group>
+  );
+}
+
+export default function RubiksCube3D({
+  state = createSolvedState(),
+  size = 300,
+  autoRotate = false,
+  move = null,
+  animDuration = 400,
+  onMoveComplete = () => {},
+}: Props) {
+  return (
+    <div style={{ width: size, height: size, margin: '0 auto', cursor: 'grab' }}>
+      <Canvas camera={{ position: [4, 4, 5], fov: 45 }} shadows>
+        <ambientLight intensity={0.8} />
+        <pointLight position={[10, 10, 10]} intensity={1.5} />
+        <pointLight position={[-10, -10, -10]} intensity={0.5} />
+        
+        <CubeContent state={state} move={move} animDuration={animDuration} onMoveComplete={onMoveComplete} />
+        
+        <OrbitControls enablePan={false} enableZoom={false} autoRotate={autoRotate && !move} />
+      </Canvas>
     </div>
   );
 }

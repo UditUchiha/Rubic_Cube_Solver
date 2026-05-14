@@ -14,13 +14,31 @@ class IDAstarSolver {
 private:
     CornerPatternDatabase cornerDB;
     vector<RubiksCube::MOVE> moves;
+    H hash_func;
+
+    struct TTEntry {
+        T cube;
+        int depth;
+    };
+    vector<TTEntry> tt;
 
     // Returns the next bound, or -1 if solved.
     int IDAstar(T& cube, int depth, int bound) {
         int estimate = cornerDB.getNumMoves(cube);
+        if (estimate > 8) estimate = 8; // The database only went to depth 8. 15 breaks admissibility!
         int f = depth + estimate;
         if (f > bound) return f;
         if (cube.isSolved()) return -1;
+
+        // Bounded Transposition Table lookup
+        size_t idx = hash_func(cube) % tt.size();
+        if (tt[idx].depth != -1 && tt[idx].cube == cube) {
+            if (tt[idx].depth <= depth) {
+                return 1e9; // Prune! We already reached this exact state via a shorter or equal path
+            }
+        }
+        // Save state to TT
+        tt[idx] = {cube, depth};
 
         int next_bound = 1e9;
         for (int i = 0; i < 18; i++) {
@@ -66,8 +84,14 @@ public:
 
     vector<RubiksCube::MOVE> solve() {
         moves.clear();
+        // Initialize 2 Million entry Transposition Table (~100 MB RAM)
+        tt.resize(1 << 21);
+        
         int bound = cornerDB.getNumMoves(rubiksCube);
         while (bound != -1) {
+            // Reset TT for each depth iteration
+            for (auto& entry : tt) entry.depth = -1;
+            
             bound = IDAstar(rubiksCube, 0, bound);
         }
         return moves;

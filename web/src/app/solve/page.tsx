@@ -57,7 +57,7 @@ export default function SolvePage() {
   }
 
   function handleShuffle() {
-    const { state } = generateScramble(20);
+    const { state } = generateScramble(12); // Reduced from 20 to 12 so the C++ solver can solve it within 3 seconds instead of timing out.
     handleStateChange(state);
     setSolveStatus('idle');
     setSolution([]);

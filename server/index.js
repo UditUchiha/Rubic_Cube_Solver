@@ -9,7 +9,7 @@ app.use(express.json());
 
 const SOLVER_PATH = process.env.SOLVER_PATH || path.join(__dirname, 'solver_api');
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'Databases', 'cornerDepth5V1.txt');
-const TIMEOUT_MS = parseInt(process.env.SOLVER_TIMEOUT || '30000', 10);
+const TIMEOUT_MS = parseInt(process.env.SOLVER_TIMEOUT || '120000', 10);
 const PORT = process.env.PORT || 3001;
 
 app.get('/health', (_req, res) => {

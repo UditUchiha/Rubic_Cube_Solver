@@ -107,33 +107,6 @@ function permParity(perm: number[]): number {
   return swaps % 2;
 }
 
-function checkCornerOrientationParity(state: CubeState): boolean {
-  let sum = 0;
-  for (let i = 0; i < 8; i++) {
-    const colors = CORNERS[i].map((p) => state[p]);
-    const wyIdx = colors.findIndex((c) => c === 0 || c === 5);
-    sum += wyIdx === -1 ? 0 : wyIdx;
-  }
-  return sum % 3 === 0;
-}
-
-function checkEdgeOrientationParity(state: CubeState): boolean {
-  let sum = 0;
-  for (let i = 0; i < 12; i++) {
-    const primary = state[EDGES[i][0]];
-    let bad: boolean;
-    if (i < 8) {
-      // Top/bottom edge: good if U/D-face sticker is White(0) or Yellow(5)
-      bad = primary !== 0 && primary !== 5;
-    } else {
-      // Equatorial edge: good if F-face sticker is Red(2) or Orange(4)
-      bad = primary !== 2 && primary !== 4;
-    }
-    if (bad) sum++;
-  }
-  return sum % 2 === 0;
-}
-
 function checkPermutationParity(state: CubeState): boolean {
   // Build solved-state piece-id arrays as canonical indices
   const solved = createSolvedState();
@@ -176,14 +149,8 @@ export function validate(state: CubeState): ValidationResult {
     }
   }
 
-  // Only run parity checks when counts and centers are valid
+  // Only run parity check when counts and centers are valid
   if (errors.length === 0) {
-    if (!checkCornerOrientationParity(state)) {
-      errors.push('Corner orientation parity error — a corner piece has been twisted');
-    }
-    if (!checkEdgeOrientationParity(state)) {
-      errors.push('Edge orientation parity error — an edge piece has been flipped');
-    }
     if (!checkPermutationParity(state)) {
       errors.push('Permutation parity error — two pieces have been swapped');
     }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const maxDuration = 90; // Increase Vercel timeout to 60s
+export const maxDuration = 300; // Vercel max; actual limit is the 120s internal solver timeout
 
 
 export async function POST(req: NextRequest) {
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60_000);
+    const timeout = setTimeout(() => controller.abort(), 120_000);
 
     const upstream = await fetch(`${backendUrl}/api/solve`, {
       method: 'POST',

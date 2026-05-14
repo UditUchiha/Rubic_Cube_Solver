@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import RubiksCubeCSS from '@/components/RubiksCubeCSS';
+import RubiksCube3D from '@/components/RubiksCube3D';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -71,8 +71,8 @@ export default function Home() {
         </div>
 
         {/* 3D Cube */}
-        <div className="animate-fade-in-up-d1 animate-float pointer-events-none mb-6 sm:mb-8">
-          <RubiksCubeCSS size={200} autoRotate />
+        <div className="animate-fade-in-up-d1 animate-float mb-6 sm:mb-8">
+          <RubiksCube3D size={320} autoRotate />
         </div>
 
         {/* Heading */}

@@ -9,15 +9,16 @@
 template<typename T, typename H>
 class IDAstarSolver {
 private:
-    CornerPatternDatabase cornerDB;
-    EdgePatternDatabase edge1DB;
-    EdgePatternDatabase edge2DB;
+    CornerPatternDatabase *cornerDB;
+    EdgePatternDatabase *edge1DB;
+    EdgePatternDatabase *edge2DB;
+    bool ownsDBs;
     vector<RubiksCube::MOVE> moves;
 
     int heuristic(const T& cube) {
-        int c = (int)cornerDB.getNumMoves(cube);
-        int e1 = (int)edge1DB.getNumMoves(cube);
-        int e2 = (int)edge2DB.getNumMoves(cube);
+        int c = (int)cornerDB->getNumMoves(cube);
+        int e1 = (int)edge1DB->getNumMoves(cube);
+        int e2 = (int)edge2DB->getNumMoves(cube);
         if (c == 0xF) c = 0;
         if (e1 == 0xF) e1 = 0;
         if (e2 == 0xF) e2 = 0;
@@ -63,12 +64,30 @@ public:
     T rubiksCube;
 
     IDAstarSolver(T _rubiksCube, string cornerFile, string edge1File, string edge2File)
-        : edge1DB(0), edge2DB(1)
+        : ownsDBs(true)
     {
         rubiksCube = _rubiksCube;
-        cornerDB.fromFile(cornerFile);
-        edge1DB.fromFile(edge1File);
-        edge2DB.fromFile(edge2File);
+        cornerDB = new CornerPatternDatabase();
+        edge1DB = new EdgePatternDatabase(0);
+        edge2DB = new EdgePatternDatabase(1);
+        cornerDB->fromFile(cornerFile);
+        edge1DB->fromFile(edge1File);
+        edge2DB->fromFile(edge2File);
+    }
+
+    IDAstarSolver(T _rubiksCube, CornerPatternDatabase &cDB,
+                  EdgePatternDatabase &e1DB, EdgePatternDatabase &e2DB)
+        : cornerDB(&cDB), edge1DB(&e1DB), edge2DB(&e2DB), ownsDBs(false)
+    {
+        rubiksCube = _rubiksCube;
+    }
+
+    ~IDAstarSolver() {
+        if (ownsDBs) {
+            delete cornerDB;
+            delete edge1DB;
+            delete edge2DB;
+        }
     }
 
     vector<RubiksCube::MOVE> solve() {

@@ -36,6 +36,7 @@ ENV SOLVER_PATH=/app/solver_api
 ENV CORNER_DB_PATH=/app/Databases/corner.db
 ENV EDGE1_DB_PATH=/app/Databases/edge1.db
 ENV EDGE2_DB_PATH=/app/Databases/edge2.db
+ENV SOLVER_TIMEOUT=300000
 
 EXPOSE 3001
 

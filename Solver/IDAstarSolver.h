@@ -90,11 +90,17 @@ public:
         }
     }
 
+    // God's number: any solvable cube is ≤20 moves from solved
+    static const int MAX_DEPTH = 20;
+
     vector<RubiksCube::MOVE> solve() {
         moves.clear();
         int bound = heuristic(rubiksCube);
 
         while (bound != -1) {
+            if (bound > MAX_DEPTH) {
+                throw runtime_error("Cube state is unsolvable (exceeded depth 20)");
+            }
             bound = IDAstar(rubiksCube, 0, bound);
         }
         return moves;

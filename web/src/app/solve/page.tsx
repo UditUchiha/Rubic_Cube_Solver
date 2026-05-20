@@ -26,6 +26,7 @@ export default function SolvePage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
   const [slowLoad, setSlowLoad] = useState(false);
+  const [shuffleDepth, setShuffleDepth] = useState(20);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -58,7 +59,7 @@ export default function SolvePage() {
   }
 
   function handleShuffle() {
-    const { state } = generateScramble(20);
+    const { state } = generateScramble(shuffleDepth);
     handleStateChange(state);
     setSolveStatus('idle');
     setSolution([]);
@@ -144,15 +145,31 @@ export default function SolvePage() {
               </div>
               
               {inputTab === 'manual' && (
-                <button
-                  onClick={handleShuffle}
-                  disabled={solveStatus === 'loading'}
-                  className="ml-auto sm:ml-auto flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold 
-                    bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors border border-white/5"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-                  Shuffle
-                </button>
+                <div className="ml-auto flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 bg-slate-900/50 rounded-lg border border-white/5 px-2 py-1">
+                    <label htmlFor="shuffle-depth" className="text-xs text-slate-500 whitespace-nowrap">Depth</label>
+                    <input
+                      id="shuffle-depth"
+                      type="number"
+                      min={1}
+                      max={25}
+                      value={shuffleDepth}
+                      onChange={(e) => setShuffleDepth(Math.max(1, Math.min(25, Number(e.target.value) || 1)))}
+                      disabled={solveStatus === 'loading'}
+                      className="w-10 bg-transparent text-center text-sm font-semibold text-slate-300 outline-none
+                        [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                  </div>
+                  <button
+                    onClick={handleShuffle}
+                    disabled={solveStatus === 'loading'}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold
+                      bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors border border-white/5"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+                    Shuffle
+                  </button>
+                </div>
               )}
             </div>
 

@@ -8,8 +8,10 @@ app.use(cors());
 app.use(express.json());
 
 const SOLVER_PATH = process.env.SOLVER_PATH || path.join(__dirname, 'solver_api');
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'Databases', 'cornerDepth5V1.txt');
-const TIMEOUT_MS = parseInt(process.env.SOLVER_TIMEOUT || '120000', 10);
+const CORNER_DB   = process.env.CORNER_DB_PATH || path.join(__dirname, 'Databases', 'corner.db');
+const EDGE1_DB    = process.env.EDGE1_DB_PATH  || path.join(__dirname, 'Databases', 'edge1.db');
+const EDGE2_DB    = process.env.EDGE2_DB_PATH  || path.join(__dirname, 'Databases', 'edge2.db');
+const TIMEOUT_MS  = parseInt(process.env.SOLVER_TIMEOUT || '120000', 10);
 const PORT = process.env.PORT || 3001;
 
 app.get('/health', (_req, res) => {
@@ -31,7 +33,7 @@ app.post('/api/solve', (req, res) => {
 
   execFile(
     SOLVER_PATH,
-    [cubeState.toUpperCase(), DB_PATH],
+    [cubeState.toUpperCase(), CORNER_DB, EDGE1_DB, EDGE2_DB],
     { timeout: TIMEOUT_MS },
     (error, stdout, stderr) => {
       if (error) {
@@ -49,6 +51,8 @@ app.post('/api/solve', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Rubik's Cube Solver API listening on port ${PORT}`);
-  console.log(`  Solver: ${SOLVER_PATH}`);
-  console.log(`  DB:     ${DB_PATH}`);
+  console.log(`  Solver:    ${SOLVER_PATH}`);
+  console.log(`  Corner DB: ${CORNER_DB}`);
+  console.log(`  Edge1 DB:  ${EDGE1_DB}`);
+  console.log(`  Edge2 DB:  ${EDGE2_DB}`);
 });

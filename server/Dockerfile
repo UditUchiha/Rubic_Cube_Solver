@@ -24,13 +24,17 @@ WORKDIR /app
 COPY --from=builder /build/out/solver_api ./solver_api
 RUN chmod +x ./solver_api
 
-COPY Databases/cornerDepth5V1.txt ./Databases/cornerDepth5V1.txt
+COPY Databases/corner.db  ./Databases/corner.db
+COPY Databases/edge1.db   ./Databases/edge1.db
+COPY Databases/edge2.db   ./Databases/edge2.db
 
 COPY server/package.json server/package-lock.json* server/index.js ./
 RUN npm ci --omit=dev || npm install --omit=dev
 
 ENV SOLVER_PATH=/app/solver_api
-ENV DB_PATH=/app/Databases/cornerDepth5V1.txt
+ENV CORNER_DB_PATH=/app/Databases/corner.db
+ENV EDGE1_DB_PATH=/app/Databases/edge1.db
+ENV EDGE2_DB_PATH=/app/Databases/edge2.db
 
 EXPOSE 3001
 

@@ -1,5 +1,6 @@
 #include <bits/stdc++.h>
 #include "PatternDatabases/CornerDBMaker.h"
+#include "PatternDatabases/EdgeDBMaker.h"
 #include "Solver/IDAstarSolver.h"
 
 using namespace std;
@@ -29,7 +30,6 @@ static bool validateColorCounts(const string &input) {
     return true;
 }
 
-// Centers at string positions 4,13,22,31,40,49 must be W,G,R,B,O,Y
 static bool validateCenters(const string &input) {
     const char expected[6] = {'W', 'G', 'R', 'B', 'O', 'Y'};
     for (int face = 0; face < 6; face++) {
@@ -40,10 +40,9 @@ static bool validateCenters(const string &input) {
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        cerr << "Usage: solver_api <54-char-cube-string> [database-path]" << endl;
+        cerr << "Usage: solver_api <54-char-cube-string> [corner-db] [edge1-db] [edge2-db]" << endl;
         cerr << "  Face order: U L F R B D (9 chars each, row-major)" << endl;
         cerr << "  Colors: W=White G=Green R=Red B=Blue O=Orange Y=Yellow" << endl;
-        cerr << "  Solved: WWWWWWWWWGGGGGGGGGRRRRRRRRRBBBBBBBBBOOOOOOOOOYYYYYYYYY" << endl;
         return 1;
     }
 
@@ -64,21 +63,22 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    string dbPath = "Databases\\cornerDepth5V1.txt";
-    if (argc >= 3) {
-        dbPath = argv[2];
-    }
+    string cornerDBPath = "Databases/corner.db";
+    string edge1DBPath  = "Databases/edge1.db";
+    string edge2DBPath  = "Databases/edge2.db";
+    if (argc >= 3) cornerDBPath = argv[2];
+    if (argc >= 4) edge1DBPath  = argv[3];
+    if (argc >= 5) edge2DBPath  = argv[4];
 
-    // Verify the database file exists before constructing the solver
-    {
-        ifstream dbCheck(dbPath);
-        if (!dbCheck.good()) {
-            cerr << "Error: Database file not found: " << dbPath << endl;
+    // Verify all database files exist
+    for (const auto &path : {cornerDBPath, edge1DBPath, edge2DBPath}) {
+        ifstream check(path);
+        if (!check.good()) {
+            cerr << "Error: Database file not found: " << path << endl;
             return 1;
         }
     }
 
-    // Build the cube from the 54-char string
     RubiksCubeBitboard cube;
     for (int face = 0; face < 6; face++) {
         for (int row = 0; row < 3; row++) {
@@ -91,14 +91,14 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Already solved — return empty solution
     if (cube.isSolved()) {
         cout << endl;
         return 0;
     }
 
     try {
-        IDAstarSolver<RubiksCubeBitboard, HashBitboard> solver(cube, dbPath);
+        IDAstarSolver<RubiksCubeBitboard, HashBitboard> solver(
+            cube, cornerDBPath, edge1DBPath, edge2DBPath);
         vector<RubiksCube::MOVE> moves = solver.solve();
 
         for (size_t i = 0; i < moves.size(); i++) {

@@ -25,6 +25,10 @@ set(COMMON_SOURCES
         PatternDatabases/CornerPatternDatabase.h
         PatternDatabases/CornerDBMaker.cpp
         PatternDatabases/CornerDBMaker.h
+        PatternDatabases/EdgePatternDatabase.cpp
+        PatternDatabases/EdgePatternDatabase.h
+        PatternDatabases/EdgeDBMaker.cpp
+        PatternDatabases/EdgeDBMaker.h
         PatternDatabases/math.cpp
         PatternDatabases/math.h)
 
@@ -34,6 +38,10 @@ add_executable(rubiks_cube_solver
 
 add_executable(solver_api
         solver_api.cpp
+        ${COMMON_SOURCES})
+
+add_executable(generate_dbs
+        generate_dbs.cpp
         ${COMMON_SOURCES})
 
 # Statically link libstdc++ and libgcc so the binary has no runtime

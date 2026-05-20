@@ -4,9 +4,9 @@
 
 #include "CornerPatternDatabase.h"
 
-CornerPatternDatabase::CornerPatternDatabase() : PatternDatabase(100179840) {}
+CornerPatternDatabase::CornerPatternDatabase() : PatternDatabase(88179840) {}
 
-CornerPatternDatabase::CornerPatternDatabase(uint8_t init_val) : PatternDatabase(100179840, init_val) {}
+CornerPatternDatabase::CornerPatternDatabase(uint8_t init_val) : PatternDatabase(88179840, init_val) {}
 
 uint32_t CornerPatternDatabase::getDatabaseIndex(const RubiksCube &cube) const {
     array<uint8_t, 8> cornerPerm =

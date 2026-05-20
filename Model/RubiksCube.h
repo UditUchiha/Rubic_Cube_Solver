@@ -183,6 +183,12 @@ public:
     uint8_t getCornerIndex(uint8_t ind) const;
 
     uint8_t getCornerOrientation(uint8_t ind) const;
+
+    string getEdgeColorString(uint8_t ind) const;
+
+    uint8_t getEdgeIndex(uint8_t ind) const;
+
+    uint8_t getEdgeOrientation(uint8_t ind) const;
 };
 
 

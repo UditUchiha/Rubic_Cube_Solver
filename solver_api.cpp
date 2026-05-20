@@ -38,47 +38,8 @@ static bool validateCenters(const string &input) {
     return true;
 }
 
-int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        cerr << "Usage: solver_api <54-char-cube-string> [corner-db] [edge1-db] [edge2-db]" << endl;
-        cerr << "  Face order: U L F R B D (9 chars each, row-major)" << endl;
-        cerr << "  Colors: W=White G=Green R=Red B=Blue O=Orange Y=Yellow" << endl;
-        return 1;
-    }
-
-    string input = argv[1];
-
-    if (input.size() != 54) {
-        cerr << "Error: Input must be exactly 54 characters, got " << input.size() << endl;
-        return 1;
-    }
-
-    if (!validateColorCounts(input)) {
-        cerr << "Error: Each color (W/G/R/B/O/Y) must appear exactly 9 times." << endl;
-        return 1;
-    }
-
-    if (!validateCenters(input)) {
-        cerr << "Error: Center facelets must be W(U) G(L) R(F) B(R) O(B) Y(D)." << endl;
-        return 1;
-    }
-
-    string cornerDBPath = "Databases/corner.db";
-    string edge1DBPath  = "Databases/edge1.db";
-    string edge2DBPath  = "Databases/edge2.db";
-    if (argc >= 3) cornerDBPath = argv[2];
-    if (argc >= 4) edge1DBPath  = argv[3];
-    if (argc >= 5) edge2DBPath  = argv[4];
-
-    // Verify all database files exist
-    for (const auto &path : {cornerDBPath, edge1DBPath, edge2DBPath}) {
-        ifstream check(path);
-        if (!check.good()) {
-            cerr << "Error: Database file not found: " << path << endl;
-            return 1;
-        }
-    }
-
+static string solveCube(const string &input, CornerPatternDatabase &cornerDB,
+                        EdgePatternDatabase &edge1DB, EdgePatternDatabase &edge2DB) {
     RubiksCubeBitboard cube;
     for (int face = 0; face < 6; face++) {
         for (int row = 0; row < 3; row++) {
@@ -91,30 +52,77 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (cube.isSolved()) {
-        cout << endl;
-        return 0;
+    if (cube.isSolved()) return "";
+
+    IDAstarSolver<RubiksCubeBitboard, HashBitboard> solver(cube, cornerDB, edge1DB, edge2DB);
+    vector<RubiksCube::MOVE> moves = solver.solve();
+
+    string result;
+    for (size_t i = 0; i < moves.size(); i++) {
+        if (i > 0) result += " ";
+        result += RubiksCube::getMove(moves[i]);
+    }
+    return result;
+}
+
+int main(int argc, char *argv[]) {
+    string cornerDBPath = "Databases/corner.db";
+    string edge1DBPath  = "Databases/edge1.db";
+    string edge2DBPath  = "Databases/edge2.db";
+    if (argc >= 2) cornerDBPath = argv[1];
+    if (argc >= 3) edge1DBPath  = argv[2];
+    if (argc >= 4) edge2DBPath  = argv[3];
+
+    for (const auto &path : {cornerDBPath, edge1DBPath, edge2DBPath}) {
+        ifstream check(path);
+        if (!check.good()) {
+            cerr << "Error: Database file not found: " << path << endl;
+            return 1;
+        }
     }
 
-    try {
-        IDAstarSolver<RubiksCubeBitboard, HashBitboard> solver(
-            cube, cornerDBPath, edge1DBPath, edge2DBPath);
-        vector<RubiksCube::MOVE> moves = solver.solve();
+    CornerPatternDatabase cornerDB;
+    EdgePatternDatabase edge1DB(0), edge2DB(1);
 
-        for (size_t i = 0; i < moves.size(); i++) {
-            if (i > 0) cout << " ";
-            cout << RubiksCube::getMove(moves[i]);
+    cerr << "Loading corner database..." << endl;
+    cornerDB.fromFile(cornerDBPath);
+    cerr << "Loading edge1 database..." << endl;
+    edge1DB.fromFile(edge1DBPath);
+    cerr << "Loading edge2 database..." << endl;
+    edge2DB.fromFile(edge2DBPath);
+    cerr << "READY" << endl;
+
+    string line;
+    while (getline(cin, line)) {
+        if (line.empty()) continue;
+
+        if (line.size() != 54) {
+            cout << "ERROR: Input must be exactly 54 characters, got " << line.size() << endl;
+            cout.flush();
+            continue;
         }
-        cout << endl;
-    } catch (const char *msg) {
-        cerr << "Error: " << msg << endl;
-        return 1;
-    } catch (const exception &e) {
-        cerr << "Error: " << e.what() << endl;
-        return 1;
-    } catch (...) {
-        cerr << "Error: Unknown error during solve" << endl;
-        return 1;
+        if (!validateColorCounts(line)) {
+            cout << "ERROR: Each color (W/G/R/B/O/Y) must appear exactly 9 times." << endl;
+            cout.flush();
+            continue;
+        }
+        if (!validateCenters(line)) {
+            cout << "ERROR: Center facelets must be W(U) G(L) R(F) B(R) O(B) Y(D)." << endl;
+            cout.flush();
+            continue;
+        }
+
+        try {
+            string result = solveCube(line, cornerDB, edge1DB, edge2DB);
+            cout << "SOLUTION: " << result << endl;
+            cout.flush();
+        } catch (const exception &e) {
+            cout << "ERROR: " << e.what() << endl;
+            cout.flush();
+        } catch (...) {
+            cout << "ERROR: Unknown error during solve" << endl;
+            cout.flush();
+        }
     }
 
     return 0;

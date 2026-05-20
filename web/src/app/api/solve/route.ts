@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export const maxDuration = 300; // Vercel max; actual limit is the 120s internal solver timeout
+export const maxDuration = 300;
 
 
 export async function POST(req: NextRequest) {
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120_000);
+    const timeout = setTimeout(() => controller.abort(), 300_000);
 
     const upstream = await fetch(`${backendUrl}/api/solve`, {
       method: 'POST',
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data, { status: upstream.status });
   } catch (err: unknown) {
     if (err instanceof Error && err.name === 'AbortError') {
-      return NextResponse.json({ success: false, error: 'Solver timed out (120s)' }, { status: 408 });
+      return NextResponse.json({ success: false, error: 'Solver timed out (300s)' }, { status: 408 });
     }
     return NextResponse.json({ success: false, error: 'Cannot reach solver server' }, { status: 503 });
   }

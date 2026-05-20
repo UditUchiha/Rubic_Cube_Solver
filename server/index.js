@@ -118,8 +118,11 @@ function sendToSolver(cubeState) {
     }
 
     const timer = setTimeout(() => {
-      log(`[req #${reqId}] TIMED OUT after ${TIMEOUT_MS}ms`);
+      log(`[req #${reqId}] TIMED OUT after ${TIMEOUT_MS}ms — killing solver to avoid stale responses`);
       pendingRequest = null;
+      if (solverProcess) {
+        solverProcess.kill('SIGKILL');
+      }
       reject(new Error(`Solver timed out after ${TIMEOUT_MS / 1000}s`));
     }, TIMEOUT_MS);
 

@@ -323,3 +323,95 @@ uint8_t RubiksCube::getCornerOrientation(uint8_t ind) const {
         return 2;
     } else return 0;
 }
+
+// 12 edges: primary facelet listed first (U/D for UD-layer, F/B for E-layer)
+string RubiksCube::getEdgeColorString(uint8_t ind) const {
+    string str = "";
+    switch (ind) {
+        case 0: // UF
+            str += getColorLetter(getColor(FACE::UP, 2, 1));
+            str += getColorLetter(getColor(FACE::FRONT, 0, 1));
+            break;
+        case 1: // UR
+            str += getColorLetter(getColor(FACE::UP, 1, 2));
+            str += getColorLetter(getColor(FACE::RIGHT, 0, 1));
+            break;
+        case 2: // UB
+            str += getColorLetter(getColor(FACE::UP, 0, 1));
+            str += getColorLetter(getColor(FACE::BACK, 0, 1));
+            break;
+        case 3: // UL
+            str += getColorLetter(getColor(FACE::UP, 1, 0));
+            str += getColorLetter(getColor(FACE::LEFT, 0, 1));
+            break;
+        case 4: // DF
+            str += getColorLetter(getColor(FACE::DOWN, 0, 1));
+            str += getColorLetter(getColor(FACE::FRONT, 2, 1));
+            break;
+        case 5: // DR
+            str += getColorLetter(getColor(FACE::DOWN, 1, 2));
+            str += getColorLetter(getColor(FACE::RIGHT, 2, 1));
+            break;
+        case 6: // DB
+            str += getColorLetter(getColor(FACE::DOWN, 2, 1));
+            str += getColorLetter(getColor(FACE::BACK, 2, 1));
+            break;
+        case 7: // DL
+            str += getColorLetter(getColor(FACE::DOWN, 1, 0));
+            str += getColorLetter(getColor(FACE::LEFT, 2, 1));
+            break;
+        case 8: // FR
+            str += getColorLetter(getColor(FACE::FRONT, 1, 2));
+            str += getColorLetter(getColor(FACE::RIGHT, 1, 0));
+            break;
+        case 9: // FL
+            str += getColorLetter(getColor(FACE::FRONT, 1, 0));
+            str += getColorLetter(getColor(FACE::LEFT, 1, 2));
+            break;
+        case 10: // BR
+            str += getColorLetter(getColor(FACE::BACK, 1, 0));
+            str += getColorLetter(getColor(FACE::RIGHT, 1, 2));
+            break;
+        case 11: // BL
+            str += getColorLetter(getColor(FACE::BACK, 1, 2));
+            str += getColorLetter(getColor(FACE::LEFT, 1, 0));
+            break;
+    }
+    return str;
+}
+
+uint8_t RubiksCube::getEdgeIndex(uint8_t ind) const {
+    string edge = getEdgeColorString(ind);
+    // Map color letters to numeric indices: W=0 G=1 R=2 B=3 O=4 Y=5
+    auto toIdx = [](char c) -> int {
+        switch (c) {
+            case 'W': return 0; case 'G': return 1; case 'R': return 2;
+            case 'B': return 3; case 'O': return 4; case 'Y': return 5;
+            default: return -1;
+        }
+    };
+    // lookup[color1][color2] = edge identity (0-11)
+    static const uint8_t lookup[6][6] = {
+      // W    G    R    B    O    Y
+        {255,  3,  0,  1,  2, 255}, // W
+        {  3,255,  9,255, 11,   7}, // G
+        {  0,  9,255,  8, 255,  4}, // R
+        {  1,255,  8,255, 10,   5}, // B
+        {  2, 11,255, 10, 255,  6}, // O
+        {255,  7,  4,  5,  6, 255}, // Y
+    };
+    return lookup[toIdx(edge[0])][toIdx(edge[1])];
+}
+
+uint8_t RubiksCube::getEdgeOrientation(uint8_t ind) const {
+    string edge = getEdgeColorString(ind);
+    char c1 = edge[0]; // primary facelet (U/D face for UD-layer, F/B face for E-layer)
+    char c2 = edge[1];
+
+    // UD-type edge (contains W or Y): reference sticker is W/Y
+    if (c1 == 'W' || c1 == 'Y' || c2 == 'W' || c2 == 'Y') {
+        return (c1 == 'W' || c1 == 'Y') ? 0 : 1;
+    }
+    // E-type edge (no W/Y): reference sticker is R/O
+    return (c1 == 'R' || c1 == 'O') ? 0 : 1;
+}

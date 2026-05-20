@@ -8,6 +8,7 @@ WORKDIR /build
 COPY CMakeLists.txt .
 COPY solver_api.cpp .
 COPY main.cpp .
+COPY generate_dbs.cpp .
 COPY Model/ Model/
 COPY PatternDatabases/ PatternDatabases/
 COPY Solver/ Solver/

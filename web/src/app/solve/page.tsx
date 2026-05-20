@@ -31,7 +31,8 @@ export default function SolvePage() {
 
   // Ping backend on mount to pre-warm cold start
   useEffect(() => {
-    fetch('/api/health-check').catch(() => {});
+    const backendUrl = process.env.NEXT_PUBLIC_SOLVER_API_URL || '';
+    fetch(`${backendUrl}/health`).catch(() => {});
   }, []);
 
   // Cycle loading messages; flag slow load after 8s
@@ -83,7 +84,8 @@ export default function SolvePage() {
     abortRef.current = controller;
 
     try {
-      const res = await fetch('/api/solve', {
+      const backendUrl = process.env.NEXT_PUBLIC_SOLVER_API_URL || '';
+      const res = await fetch(`${backendUrl}/api/solve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cubeState: serialize(cubeState) }),

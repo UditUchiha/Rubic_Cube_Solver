@@ -7,13 +7,18 @@ import SolutionPlayer from '@/components/SolutionPlayer';
 import WebcamScanner from '@/components/WebcamScanner';
 import ImageUpload from '@/components/ImageUpload';
 import { CubeState, createSolvedState, serialize, validate, generateScramble } from '@/lib/cubeState';
+import { twoPhaseSolver, SolverStatus } from '@/lib/twoPhaseSolver';
 
 type SolveStatus = 'idle' | 'loading' | 'solved' | 'error';
 type InputTab = 'manual' | 'camera' | 'upload';
+type SolveMode = 'fast' | 'optimal';
 
+// Two-phase runs in the browser and is insensitive to depth, so the only limit
+// that matters now is the optimal backend's. 20 is God's number - no scramble
+// can be deeper than that.
 const DEFAULT_SHUFFLE_DEPTH = 12;
-const MAX_SHUFFLE_DEPTH = 14;
-// Past this the solve is slow enough that the user should be warned first.
+const MAX_SHUFFLE_DEPTH = 20;
+// Depth past which the *optimal* backend gets slow. Fast mode does not care.
 const SLOW_SHUFFLE_DEPTH = 13;
 
 const LOADING_MESSAGES = [
@@ -37,13 +42,28 @@ export default function SolvePage() {
   // the last depth that still reliably comes back.
   const [shuffleDepth, setShuffleDepth] = useState(DEFAULT_SHUFFLE_DEPTH);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [mode, setMode] = useState<SolveMode>('fast');
+  const [solverStatus, setSolverStatus] = useState<SolverStatus>('idle');
+  const [lastSolveMs, setLastSolveMs] = useState<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Ping backend on mount to pre-warm cold start
+  // Build the two-phase pruning tables straight away. It takes a couple of
+  // seconds in a worker, and starting now means it finishes long before the
+  // user has finished entering their cube.
   useEffect(() => {
+    setSolverStatus(twoPhaseSolver.getStatus());
+    const unsubscribe = twoPhaseSolver.onStatusChange(setSolverStatus);
+    twoPhaseSolver.warmUp();
+    return unsubscribe;
+  }, []);
+
+  // Only wake the optimal backend if the user actually wants it - on a free
+  // tier it sleeps after 15 minutes and takes about a minute to come back.
+  useEffect(() => {
+    if (mode !== 'optimal') return;
     const backendUrl = process.env.NEXT_PUBLIC_SOLVER_API_URL || '';
     fetch(`${backendUrl}/health`).catch(() => {});
-  }, []);
+  }, [mode]);
 
   // Cycle loading messages; flag slow load after 8s
   useEffect(() => {
@@ -89,6 +109,20 @@ export default function SolvePage() {
     setValidationErrors([]);
     setSolveStatus('loading');
     setLoadingMsgIdx(0);
+    setLastSolveMs(null);
+
+    if (mode === 'fast') {
+      try {
+        const { moves, solveMs } = await twoPhaseSolver.solve(cubeState);
+        setSolution(moves);
+        setLastSolveMs(solveMs);
+        setSolveStatus('solved');
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : 'Solver failed');
+        setSolveStatus('error');
+      }
+      return;
+    }
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -104,6 +138,7 @@ export default function SolvePage() {
       const data = await res.json();
       if (data.success) {
         setSolution(data.moves as string[]);
+        if (typeof data.elapsedMs === 'number') setLastSolveMs(data.elapsedMs);
         setSolveStatus('solved');
       } else {
         setErrorMsg(data.error ?? 'Solver returned an error');
@@ -223,23 +258,77 @@ export default function SolvePage() {
             {/* Solve Actions */}
             {inputTab === 'manual' && (
               <div className="flex flex-col gap-3 mt-auto pt-2 border-t border-white/5">
+
+                {/* ── Fast vs optimal ───────────────────────────────────── */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5">
+                    <button
+                      onClick={() => setMode('fast')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                        mode === 'fast'
+                          ? 'bg-indigo-600 text-white shadow-md'
+                          : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      Fast
+                      <span className="hidden sm:inline font-normal opacity-70"> · ~21 moves, instant</span>
+                    </button>
+                    <button
+                      onClick={() => setMode('optimal')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                        mode === 'optimal'
+                          ? 'bg-indigo-600 text-white shadow-md'
+                          : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      Optimal
+                      <span className="hidden sm:inline font-normal opacity-70"> · fewest moves, slow</span>
+                    </button>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    {mode === 'fast' ? (
+                      solverStatus === 'ready' ? (
+                        <>Two-phase solver, running in your browser. No server, no waiting.</>
+                      ) : solverStatus === 'unavailable' ? (
+                        <span className="text-amber-400/80">
+                          Your browser cannot run the in-page solver. Switch to Optimal.
+                        </span>
+                      ) : (
+                        <>Preparing the in-browser solver…</>
+                      )
+                    ) : (
+                      <>Shortest possible solution from the C++ IDA* server. Cost rises steeply with
+                      scramble depth — past {SLOW_SHUFFLE_DEPTH} moves it may time out.</>
+                    )}
+                  </p>
+                </div>
+
                 <button
                   onClick={handleSolve}
-                  disabled={solveStatus === 'loading'}
+                  disabled={
+                    solveStatus === 'loading' ||
+                    (mode === 'fast' && solverStatus !== 'ready')
+                  }
                   className="btn-shimmer relative w-full py-3.5 sm:py-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-white text-base sm:text-lg transition-all 
                     shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(99,102,241,0.5)] active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none overflow-hidden"
                 >
                   {solveStatus === 'loading' ? (
                     <span className="flex items-center justify-center gap-3">
                       <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      {LOADING_MESSAGES[loadingMsgIdx]}
+                      {mode === 'fast' ? 'Solving…' : LOADING_MESSAGES[loadingMsgIdx]}
+                    </span>
+                  ) : mode === 'fast' && solverStatus !== 'ready' ? (
+                    <span className="flex items-center justify-center gap-3">
+                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Preparing solver…
                     </span>
                   ) : (
                     'Solve Cube'
                   )}
                 </button>
 
-                {solveStatus === 'loading' && (
+                {solveStatus === 'loading' && mode === 'optimal' && (
                   <button
                     onClick={handleCancel}
                     className="w-full py-2.5 text-sm font-medium text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/50 rounded-lg transition-colors border border-transparent hover:border-slate-600"
@@ -248,7 +337,7 @@ export default function SolvePage() {
                   </button>
                 )}
 
-                {slowLoad && (
+                {slowLoad && mode === 'optimal' && (
                   <p className="text-xs text-center text-amber-400/80 animate-fade-in-up">
                     <svg className="inline mr-1 -mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                     Server is waking up. This may take up to 45s on the first request.
@@ -277,6 +366,13 @@ export default function SolvePage() {
                   </h2>
                   <span className="text-xs font-semibold px-2.5 py-1 bg-indigo-500/20 text-indigo-300 rounded-md border border-indigo-500/20">
                     {solution.length === 0 ? '0 moves' : `${solution.length} moves`}
+                    {lastSolveMs !== null && (
+                      <span className="ml-1.5 font-normal opacity-70">
+                        {lastSolveMs < 1000
+                          ? `${Math.round(lastSolveMs)} ms`
+                          : `${(lastSolveMs / 1000).toFixed(1)} s`}
+                      </span>
+                    )}
                   </span>
                 </div>
                 

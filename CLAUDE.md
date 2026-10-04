@@ -84,13 +84,32 @@ Moves enum: L/L'/L2, R/R'/R2, U/U'/U2, D/D'/D2, F/F'/F2, B/B'/B2 (indices 0-17)
 
 Next.js 14 frontend (`web/`) with Three.js 3D cube visualization + Express backend (`server/`) calling the C++ solver via `child_process`.
 
+### Two solvers, and when each is used
+
+The UI defaults to **Fast** and only touches the backend in **Optimal**:
+
+| | Fast (default) | Optimal |
+|---|---|---|
+| Algorithm | Kociemba two-phase (`cubejs`) | Korf IDA* (C++) |
+| Runs on | the user's browser, in a Web Worker | the Express/Render backend |
+| Solution | ~21-22 moves | provably fewest |
+| Time | 50-150ms at any depth | 5-8x more per extra move |
+
+This split exists because IDA* cost is exponential in depth and no amount of hosting fixes that. On the deployed free tier (~0.1 CPU) a 12-move scramble took **21 seconds** and 13+ moves exceeded the 50s limit; the same cube solves in about 90ms in the browser.
+
+`web/src/lib/twoPhase.worker.ts` + `twoPhaseSolver.ts` implement Fast mode:
+- `initSolver()` builds pruning tables in ~1.5-3s and **blocks its thread**, so it only ever runs inside the worker, started on page mount so it overlaps with the user entering their cube. An earlier attempt (branch `feature/kociemba-threejs`) put this in a Vercel serverless route, which paid the full table build on every cold start — the algorithm there was correct, the placement was not.
+- `stateToFacelets()` maps this project's U L F R B D colour-index layout to cubejs's U R F D L B facelet-letter string, going via centre colours so the non-standard colour scheme (F=red, L=green) doesn't matter.
+- Every solution is replayed through `applyMove` before being returned; a move list that doesn't solve the cube raises instead of reaching the user.
+- An already-solved cube short-circuits to `[]` — two-phase otherwise returns a pointless 14-move identity sequence.
+
 - `solver_api.cpp` — long-lived process: `solver_api [corner-db] [edge1-db] [edge2-db]`. Loads the databases once, then reads one 54-char state per line on stdin and writes `SOLUTION: <moves>` or `ERROR: <reason>` per line on stdout. Startup progress and `READY` go to stderr. `SOLVER_TIME_LIMIT` (seconds, default 50) bounds each solve; exceeding it returns an `ERROR:` line and keeps the process alive rather than dying and forcing a ~30s database reload.
 - `server/index.js` — Express server owning one long-lived solver process. Requests queue (bounded by `SOLVER_MAX_QUEUE`) rather than being rejected, since the solver handles one cube at a time. Restarts use exponential backoff and stop on a `FATAL:` line from the solver.
 - `web/src/components/RubiksCube3D.tsx` — Three.js interactive 3D cube (react-three-fiber)
 - `web/src/components/SolutionPlayer.tsx` — Animated solution playback with controls
 - `web/src/lib/cubeState.ts` — CubeState type, validation, move application
 
-Deployment: Frontend on Vercel, Backend on Render. Backend env vars: `SOLVER_PATH`, `CORNER_DB_PATH`, `EDGE1_DB_PATH`, `EDGE2_DB_PATH`, `SOLVER_TIME_LIMIT`, `SOLVER_MAX_QUEUE`, `SOLVER_TIMEOUT`.
+Deployment: Frontend on Vercel, Backend on Render. The backend is now optional — Fast mode works with it down, and `/health` is only pinged when the user selects Optimal, so a free-tier backend isn't woken on every page load. Backend env vars: `SOLVER_PATH`, `CORNER_DB_PATH`, `EDGE1_DB_PATH`, `EDGE2_DB_PATH`, `SOLVER_TIME_LIMIT`, `SOLVER_MAX_QUEUE`, `SOLVER_TIMEOUT`.
 
 ### Scan input
 

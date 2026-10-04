@@ -18,6 +18,15 @@ using namespace std;
 
 class RubiksCube {
 public:
+    /*
+     * Returned by getCornerIndex / getCornerOrientation / getEdgeIndex when the
+     * facelets at that slot do not form a physically possible piece (a scan or
+     * a hand-painted state can produce e.g. a white/yellow edge). Callers must
+     * reject such a cube rather than feed it to the solver, which would search
+     * forever for a solution that does not exist.
+     */
+    static const uint8_t INVALID_PIECE = 0xFF;
+
     enum class FACE {
         UP,
         LEFT,

@@ -1,4 +1,5 @@
 #include <bits/stdc++.h>
+#include "Model/CubeValidation.h"
 #include "PatternDatabases/CornerDBMaker.h"
 #include "PatternDatabases/EdgeDBMaker.h"
 #include "Solver/IDAstarSolver.h"
@@ -38,8 +39,7 @@ static bool validateCenters(const string &input) {
     return true;
 }
 
-static string solveCube(const string &input, CornerPatternDatabase &cornerDB,
-                        EdgePatternDatabase &edge1DB, EdgePatternDatabase &edge2DB) {
+static RubiksCubeBitboard parseCube(const string &input) {
     RubiksCubeBitboard cube;
     for (int face = 0; face < 6; face++) {
         for (int row = 0; row < 3; row++) {
@@ -51,11 +51,26 @@ static string solveCube(const string &input, CornerPatternDatabase &cornerDB,
             }
         }
     }
+    return cube;
+}
+
+static string solveCube(const string &input, CornerPatternDatabase &cornerDB,
+                        EdgePatternDatabase &edge1DB, EdgePatternDatabase &edge2DB,
+                        double timeLimitSeconds) {
+    RubiksCubeBitboard cube = parseCube(input);
 
     if (cube.isSolved()) return "";
 
     IDAstarSolver<RubiksCubeBitboard, HashBitboard> solver(cube, cornerDB, edge1DB, edge2DB);
-    vector<RubiksCube::MOVE> moves = solver.solve();
+    vector<RubiksCube::MOVE> moves = solver.solve(timeLimitSeconds);
+
+    // Never hand back a solution we have not checked. A wrong move list is far
+    // worse than an error: the user would turn a real cube into a worse mess.
+    RubiksCubeBitboard verify = cube;
+    for (size_t i = 0; i < moves.size(); i++) verify.move(moves[i]);
+    if (!verify.isSolved())
+        throw runtime_error("internal error: solver returned a move list that "
+                            "does not solve the cube");
 
     string result;
     for (size_t i = 0; i < moves.size(); i++) {
@@ -73,23 +88,50 @@ int main(int argc, char *argv[]) {
     if (argc >= 3) edge1DBPath  = argv[2];
     if (argc >= 4) edge2DBPath  = argv[3];
 
+    // Give up on a cube that is too deep rather than letting the supervisor
+    // kill us. Being killed costs every other user the ~30s it takes to reload
+    // 86 MB of databases; answering "too hard" costs nothing and keeps the
+    // process warm. Default sits under a typical 60s request timeout.
+    double timeLimitSeconds = 50.0;
+    if (const char *env = getenv("SOLVER_TIME_LIMIT")) {
+        double parsed = atof(env);
+        if (parsed > 0.0) timeLimitSeconds = parsed;
+    }
+
     for (const auto &path : {cornerDBPath, edge1DBPath, edge2DBPath}) {
-        ifstream check(path);
+        ifstream check(path, ios::in | ios::binary);
         if (!check.good()) {
-            cerr << "Error: Database file not found: " << path << endl;
+            cerr << "FATAL: Database file not found: " << path << endl;
             return 1;
         }
     }
 
-    CornerPatternDatabase cornerDB;
-    EdgePatternDatabase edge1DB(0), edge2DB(1);
+    // Roughly 86 MB of nibble arrays. Heap-allocate so a constrained container
+    // fails here with a clear message rather than blowing the stack later.
+    unique_ptr<CornerPatternDatabase> cornerDB;
+    unique_ptr<EdgePatternDatabase> edge1DB, edge2DB;
 
-    cerr << "Loading corner database..." << endl;
-    cornerDB.fromFile(cornerDBPath);
-    cerr << "Loading edge1 database..." << endl;
-    edge1DB.fromFile(edge1DBPath);
-    cerr << "Loading edge2 database..." << endl;
-    edge2DB.fromFile(edge2DBPath);
+    try {
+        cerr << "Loading corner database..." << endl;
+        cornerDB.reset(new CornerPatternDatabase());
+        cornerDB->fromFile(cornerDBPath);
+
+        cerr << "Loading edge1 database..." << endl;
+        edge1DB.reset(new EdgePatternDatabase(0));
+        edge1DB->fromFile(edge1DBPath);
+
+        cerr << "Loading edge2 database..." << endl;
+        edge2DB.reset(new EdgePatternDatabase(1));
+        edge2DB->fromFile(edge2DBPath);
+    } catch (const exception &e) {
+        // Previously an unreadable or truncated database threw past main and
+        // aborted the process, which the supervisor read as a crash and
+        // respawned forever. Exit deliberately instead.
+        cerr << "FATAL: " << e.what() << endl;
+        return 1;
+    }
+
+    cerr << "Per-request time limit: " << timeLimitSeconds << "s" << endl;
     cerr << "READY" << endl;
 
     string line;
@@ -112,9 +154,28 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
+        // Reject physically impossible cubes here, before the search starts.
+        // IDA* cannot fail fast on an unsolvable state -- it would deepen all
+        // the way to the God's-number bound, hold the single solver slot for
+        // minutes, and then be killed by the request timeout.
+        {
+            string why;
+            if (!isCubeSolvable(parseCube(line), why)) {
+                cout << "ERROR: " << why << endl;
+                cout.flush();
+                continue;
+            }
+        }
+
         try {
-            string result = solveCube(line, cornerDB, edge1DB, edge2DB);
+            string result = solveCube(line, *cornerDB, *edge1DB, *edge2DB, timeLimitSeconds);
             cout << "SOLUTION: " << result << endl;
+            cout.flush();
+        } catch (const SolverTimeout &) {
+            // Deliberately not fatal: the process stays up with its databases
+            // loaded and is ready for the next request immediately.
+            cout << "ERROR: This scramble is too deep to solve within "
+                 << (int)timeLimitSeconds << "s. Try a shallower scramble." << endl;
             cout.flush();
         } catch (const exception &e) {
             cout << "ERROR: " << e.what() << endl;

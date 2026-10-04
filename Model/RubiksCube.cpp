@@ -23,6 +23,7 @@ char RubiksCube::getColorLetter(COLOR color) {
         case COLOR::ORANGE:
             return 'O';
     }
+    return '?';   // unreachable for a valid COLOR; keeps the function total
 }
 
 /*
@@ -67,6 +68,7 @@ string RubiksCube::getMove(MOVE ind) {
         case MOVE::B2:
             return "B2";
     }
+    throw invalid_argument("getMove: move index out of range");
 }
 
 /*
@@ -111,6 +113,7 @@ RubiksCube &RubiksCube::move(MOVE ind) {
         case MOVE::B2:
             return this->b2();
     }
+    throw invalid_argument("move: move index out of range");
 }
 
 /*
@@ -155,6 +158,7 @@ RubiksCube &RubiksCube::invert(MOVE ind) {
         case MOVE::B2:
             return this->b2();
     }
+    throw invalid_argument("invert: move index out of range");
 }
 
 void RubiksCube::print() const {
@@ -206,10 +210,27 @@ void RubiksCube::print() const {
 }
 
 vector<RubiksCube::MOVE> RubiksCube::randomShuffleCube(unsigned int times) {
+    // Seeded once per process. The previous implementation called srand(time(0))
+    // on every invocation, so two shuffles inside the same second produced the
+    // identical scramble.
+    static mt19937 rng(
+            (unsigned)chrono::high_resolution_clock::now().time_since_epoch().count());
+    static uniform_int_distribution<int> pick(0, 17);
+
     vector<MOVE> moves_performed;
-    srand(time(0));
+    moves_performed.reserve(times);
+
+    // Never turn the same face twice in a row: "R R'" cancels outright and
+    // "R R" is just "R2", so unfiltered random moves make the scramble
+    // shallower than the requested depth and the reported difficulty a lie.
+    int lastFace = -1;
     for (unsigned int i = 0; i < times; i++) {
-        unsigned int selectMove = (rand() % 18);
+        int selectMove;
+        do {
+            selectMove = pick(rng);
+        } while (selectMove / 3 == lastFace);
+        lastFace = selectMove / 3;
+
         moves_performed.push_back(static_cast<MOVE>(selectMove));
         this->move(static_cast<MOVE>(selectMove));
     }
@@ -283,6 +304,15 @@ string RubiksCube::getCornerColorString(uint8_t ind) const {
 uint8_t RubiksCube::getCornerIndex(uint8_t ind) const {
     string corner = getCornerColorString(ind);
 
+    // Exactly one sticker from each opposite-colour pair must be present.
+    int nWY = 0, nRO = 0, nBG = 0;
+    for (char c: corner) {
+        if (c == 'W' || c == 'Y') nWY++;
+        else if (c == 'R' || c == 'O') nRO++;
+        else if (c == 'B' || c == 'G') nBG++;
+    }
+    if (nWY != 1 || nRO != 1 || nBG != 1) return INVALID_PIECE;
+
     uint8_t ret = 0;
     for (auto c: corner) {
         if (c != 'W' && c != 'Y') continue;
@@ -316,6 +346,11 @@ uint8_t RubiksCube::getCornerOrientation(uint8_t ind) const {
         if (c != 'W' && c != 'Y') continue;
         actual_str.push_back(c);
     }
+
+    // A physically valid corner carries exactly one W/Y sticker. Miscoloured
+    // input used to index actual_str[0] on an empty string; report the piece
+    // as invalid instead so callers can reject the cube.
+    if (actual_str.size() != 1) return INVALID_PIECE;
 
     if (corner[1] == actual_str[0]) {
         return 1;
@@ -400,7 +435,11 @@ uint8_t RubiksCube::getEdgeIndex(uint8_t ind) const {
         {  2, 11,255, 10, 255,  6}, // O
         {255,  7,  4,  5,  6, 255}, // Y
     };
-    return lookup[toIdx(edge[0])][toIdx(edge[1])];
+    const int a = toIdx(edge[0]), b = toIdx(edge[1]);
+    if (a < 0 || b < 0) return INVALID_PIECE;
+    const uint8_t id = lookup[a][b];
+    // 255 marks an impossible pair (two identical or two opposite colours).
+    return id == 255 ? INVALID_PIECE : id;
 }
 
 uint8_t RubiksCube::getEdgeOrientation(uint8_t ind) const {

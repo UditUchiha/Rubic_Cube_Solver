@@ -5,13 +5,13 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: "Rubik's Cube Solver — IDA* AI",
   description:
-    "Input your scrambled Rubik's Cube and our IDA* algorithm finds the optimal solution in seconds. Powered by a 48 MB corner pattern database.",
+    "Input your scrambled Rubik's Cube and our IDA* solver finds the shortest possible solution in seconds, using 86 MB of corner and edge pattern databases.",
 };
 
 const STATS = [
-  { value: 'IDA*',  label: 'Algorithm',   sub: 'Optimal path search' },
-  { value: '48 MB', label: 'Pattern DB',  sub: 'Corner heuristic'    },
-  { value: '≤20',   label: 'Move limit',  sub: "God's Number bound"  },
+  { value: 'IDA*',  label: 'Algorithm',   sub: 'Optimal path search'     },
+  { value: '86 MB', label: 'Pattern DB',  sub: 'Corner + 2 edge groups'  },
+  { value: '≤20',   label: 'Move limit',  sub: "God's Number bound"      },
 ];
 
 const FEATURES = [
@@ -70,9 +70,11 @@ export default function Home() {
           </span>
         </div>
 
-        {/* 3D Cube */}
-        <div className="animate-fade-in-up-d1 animate-float pointer-events-none mb-6 sm:mb-8">
-          <RubiksCube3D size={200} autoRotate />
+        {/* 3D Cube - drag to turn it, it keeps spinning either way.
+            This used to carry `pointer-events-none`, which silently disabled
+            OrbitControls while the cube still advertised a grab cursor. */}
+        <div className="animate-fade-in-up-d1 animate-float mb-6 sm:mb-8 h-[220px] w-[220px] sm:h-[280px] sm:w-[280px]">
+          <RubiksCube3D fill autoRotate interactive />
         </div>
 
         {/* Heading */}
@@ -84,9 +86,9 @@ export default function Home() {
 
         {/* Subtitle */}
         <p className="animate-fade-in-up-d3 max-w-xl text-base sm:text-lg text-slate-400 mb-8 text-balance">
-          Paint your scrambled cube, hit Solve — our AI finds the{' '}
-          <span className="text-white font-medium">optimal solution</span> using a
-          48 MB corner pattern database and iterative deepening A*.
+          Paint your scrambled cube, hit Solve — we find the{' '}
+          <span className="text-white font-medium">shortest possible solution</span> using
+          86 MB of pattern databases and iterative-deepening A*.
         </p>
 
         {/* CTA */}

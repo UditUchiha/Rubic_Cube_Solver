@@ -2,6 +2,16 @@ cmake_minimum_required(VERSION 3.20)
 project(rubiks_cube_solver)
 
 set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# The solver is a brute-force tree search; an unoptimised build is roughly
+# 5-10x slower, which is the difference between solving a 13-move scramble
+# in seconds and timing out. Default to Release when the caller did not pick.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+            Debug Release RelWithDebInfo MinSizeRel)
+endif()
 
 include_directories(Model)
 
@@ -14,8 +24,8 @@ set(COMMON_SOURCES
         Solver/DFSSolver.h
         Solver/BFSSolver.h
         Solver/IDDFSSolver.h
-        Model/PatternDatabase/PatternDatabase.h
         Solver/IDAstarSolver.h
+        Model/CubeValidation.h
         PatternDatabases/NibbleArray.cpp
         PatternDatabases/NibbleArray.h
         PatternDatabases/PatternDatabase.cpp
@@ -44,7 +54,13 @@ add_executable(generate_dbs
         generate_dbs.cpp
         ${COMMON_SOURCES})
 
-# Statically link libstdc++ and libgcc so the binary has no runtime
-# dependency on the host's libstdc++ version (fixes GLIBCXX_3.4.32 error
-# when running a GCC-13-built binary inside node:20-slim).
-target_link_options(solver_api PRIVATE -static-libstdc++ -static-libgcc)
+# Statically link libstdc++ and libgcc on every target, not just solver_api.
+# On Linux this avoids the GLIBCXX_3.4.32 error when a GCC-13-built binary runs
+# inside node:20-slim. On Windows it matters just as much: whichever
+# libstdc++-6.dll appears first on PATH wins, and picking up the one shipped
+# with Git for Windows instead of the toolchain's own segfaults on startup.
+if(NOT MSVC)
+    foreach(target rubiks_cube_solver solver_api generate_dbs)
+        target_link_options(${target} PRIVATE -static-libstdc++ -static-libgcc)
+    endforeach()
+endif()

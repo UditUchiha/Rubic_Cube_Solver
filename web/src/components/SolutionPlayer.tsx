@@ -1,7 +1,7 @@
 'use client';
 
 import { CubeState, computeCubeStates } from '@/lib/cubeState';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import clsx from 'clsx';
 import RubiksCube3D from './RubiksCube3D';
 
@@ -24,7 +24,13 @@ export default function SolutionPlayer({ initialState, moves }: Props) {
   const [cubeSize, setCubeSize] = useState(160);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const cubeStates = computeCubeStates(initialState, moves);
+  // Memoised: this walks the whole solution and copies 54 cells per move, and
+  // it used to re-run on every render - including the ones the animation frame
+  // loop triggers for each move.
+  const cubeStates = useMemo(
+    () => computeCubeStates(initialState, moves),
+    [initialState, moves]
+  );
 
   // Compute responsive cube size
   const computeSize = useCallback(() => {
@@ -84,6 +90,7 @@ export default function SolutionPlayer({ initialState, moves }: Props) {
           move={animatingMove}
           animDuration={speed}
           onMoveComplete={handleMoveComplete}
+          interactive
         />
       </div>
 

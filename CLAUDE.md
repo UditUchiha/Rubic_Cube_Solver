@@ -11,8 +11,9 @@ cmake -B build -G "MinGW Makefiles"
 # Build all targets
 cmake --build build
 
-# Run solver (randomly shuffles then solves)
-.\build\rubiks_cube_solver.exe
+# Run solver (shuffles 12 moves by default, then solves)
+.\build\rubiks_cube_solver.exe            # depth 12, 60s budget
+.\build\rubiks_cube_solver.exe 13 120     # depth 13, 120s budget (0 = no limit)
 
 # Generate pattern databases (run once, takes hours, needs ~8GB RAM)
 .\build\generate_dbs.exe          # all 3 databases
@@ -25,6 +26,8 @@ cd web && npm run dev
 ```
 
 The project uses CMake (minimum 3.20) with C++14. Three executable targets: `rubiks_cube_solver`, `solver_api`, and `generate_dbs`.
+
+`CMAKE_BUILD_TYPE` defaults to `Release`. Do not build the solver unoptimised — IDA* is a brute-force tree search and `-O0` is roughly 5-10x slower, which is the difference between a 13-move scramble solving in seconds and timing out.
 
 ## Architecture
 
@@ -43,7 +46,16 @@ All solvers are header-only templates parameterized on `<T, H>` (cube representa
 - **DFSSolver** — depth-limited DFS
 - **BFSSolver** — breadth-first search
 - **IDDFSSolver** — iterative deepening
-- **IDAstarSolver** — Korf's IDA* using 3 pattern databases (corner + 2 edge groups). Constructor takes 3 database file paths. Heuristic: `max(cornerDB, edge1DB, edge2DB)`.
+- **IDAstarSolver** — Korf's IDA* using 3 pattern databases (corner + 2 edge groups). Two constructors: one taking 3 database file paths (loads its own), one taking database references (shares already-loaded ones — use this when solving repeatedly). Heuristic: `max(cornerDB, edge1DB, edge2DB)`.
+  `solve(timeLimitSeconds)` throws `SolverTimeout` when the budget runs out; `0` means no limit. Always pass a budget in a server context — solve cost grows ~5-8x per extra move (12 moves <1s, 13 ~10-20s, 15 ~10min), so an unbudgeted deep scramble looks indistinguishable from a hang.
+
+### Cube Validation (Model/CubeValidation.h)
+
+`isCubeSolvable(cube, error)` checks the three laws that decide reachability: corner twists sum to 0 mod 3, edge flips sum to 0 mod 2, and corner/edge permutation parity match. Call it before solving — IDA* cannot fail fast on an unsolvable cube, it searches to the God's-number bound first.
+
+Two subtleties, both documented in the header and mirrored in `web/src/lib/cubeState.ts`:
+- `getCornerIndex()` numbers corners by colour bits, which orders UBL before UBR, so ids must be mapped back to home slots or the solved cube reads as one transposition from identity.
+- `getCornerOrientation()` is not sign-consistent: four corner slots list their facelets in a left-handed cycle, so their twist values must be negated (`o -> (3-o)%3`) before summing. Raw twist sums are uniformly spread over 0/1/2 and carry no information. The pattern database is unaffected — per-corner relabelling is a bijection, so the raw values still index corner states uniquely.
 
 ### Pattern Databases (PatternDatabases/)
 
@@ -54,7 +66,9 @@ All solvers are header-only templates parameterized on `<T, H>` (cube representa
 - **NibbleArray** — compact 4-bit-per-entry storage
 - **PermutationIndexer<N, K>** — Lehmer code for (partial) permutation ranking
 
-Database files: `Databases/corner.db` (~42MB), `Databases/edge1.db` (~21MB), `Databases/edge2.db` (~21MB). Generate with `generate_dbs.exe`.
+Database files: `Databases/corner.db` (44,089,921 bytes), `Databases/edge1.db` and `Databases/edge2.db` (21,288,961 bytes each). Generate with `generate_dbs.exe`.
+
+`PatternDatabase::fromFile` must open with `ios::binary`. Without it the stream is text-mode on Windows and stops at the first 0x1A byte — corner.db has one at offset 18108360, so only 41% of the file loaded and the rest stayed at the 0xFF "unknown" fill, which the heuristic reads as 0.
 
 ### Edge Numbering
 
@@ -70,10 +84,16 @@ Moves enum: L/L'/L2, R/R'/R2, U/U'/U2, D/D'/D2, F/F'/F2, B/B'/B2 (indices 0-17)
 
 Next.js 14 frontend (`web/`) with Three.js 3D cube visualization + Express backend (`server/`) calling the C++ solver via `child_process`.
 
-- `solver_api.cpp` — CLI: `solver_api <54-char-state> [corner-db] [edge1-db] [edge2-db]`
-- `server/index.js` — Express server proxying solve requests to the C++ binary
+- `solver_api.cpp` — long-lived process: `solver_api [corner-db] [edge1-db] [edge2-db]`. Loads the databases once, then reads one 54-char state per line on stdin and writes `SOLUTION: <moves>` or `ERROR: <reason>` per line on stdout. Startup progress and `READY` go to stderr. `SOLVER_TIME_LIMIT` (seconds, default 50) bounds each solve; exceeding it returns an `ERROR:` line and keeps the process alive rather than dying and forcing a ~30s database reload.
+- `server/index.js` — Express server owning one long-lived solver process. Requests queue (bounded by `SOLVER_MAX_QUEUE`) rather than being rejected, since the solver handles one cube at a time. Restarts use exponential backoff and stop on a `FATAL:` line from the solver.
 - `web/src/components/RubiksCube3D.tsx` — Three.js interactive 3D cube (react-three-fiber)
 - `web/src/components/SolutionPlayer.tsx` — Animated solution playback with controls
 - `web/src/lib/cubeState.ts` — CubeState type, validation, move application
 
-Deployment: Frontend on Vercel, Backend on Render. Backend env vars: `SOLVER_PATH`, `CORNER_DB_PATH`, `EDGE1_DB_PATH`, `EDGE2_DB_PATH`.
+Deployment: Frontend on Vercel, Backend on Render. Backend env vars: `SOLVER_PATH`, `CORNER_DB_PATH`, `EDGE1_DB_PATH`, `EDGE2_DB_PATH`, `SOLVER_TIME_LIMIT`, `SOLVER_MAX_QUEUE`, `SOLVER_TIMEOUT`.
+
+### Scan input
+
+`web/src/lib/colorClassifier.ts` classifies all 54 stickers in one pass (`assignCubeColors`) under an exact nine-per-colour quota, using the six centre stickers as live references for the current lighting. Per-sticker threshold classification is kept only for live previews — deciding each sticker alone is what makes red and orange flip under warm light.
+
+Each face has a fixed orientation inside the 54-char state. The scanners show the required top and left neighbour colours per face, because a face captured 90 degrees out produces a correctly-coloured, unsolvable cube.

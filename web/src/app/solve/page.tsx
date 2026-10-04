@@ -11,6 +11,11 @@ import { CubeState, createSolvedState, serialize, validate, generateScramble } f
 type SolveStatus = 'idle' | 'loading' | 'solved' | 'error';
 type InputTab = 'manual' | 'camera' | 'upload';
 
+const DEFAULT_SHUFFLE_DEPTH = 12;
+const MAX_SHUFFLE_DEPTH = 14;
+// Past this the solve is slow enough that the user should be warned first.
+const SLOW_SHUFFLE_DEPTH = 13;
+
 const LOADING_MESSAGES = [
   'Connecting to solver...',
   'Waking up server...',
@@ -26,7 +31,11 @@ export default function SolvePage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
   const [slowLoad, setSlowLoad] = useState(false);
-  const [shuffleDepth, setShuffleDepth] = useState(20);
+  // 12, not 20. The solver is optimal, so its cost grows ~5-8x per extra move:
+  // 12 returns in well under a second, 13 takes 10-20s, and past about 14 it
+  // runs longer than the request timeout. MAX_SHUFFLE_DEPTH caps the input at
+  // the last depth that still reliably comes back.
+  const [shuffleDepth, setShuffleDepth] = useState(DEFAULT_SHUFFLE_DEPTH);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -152,9 +161,13 @@ export default function SolvePage() {
                       id="shuffle-depth"
                       type="number"
                       min={1}
-                      max={25}
+                      max={MAX_SHUFFLE_DEPTH}
                       value={shuffleDepth}
-                      onChange={(e) => setShuffleDepth(Math.max(1, Math.min(25, Number(e.target.value) || 1)))}
+                      onChange={(e) =>
+                        setShuffleDepth(
+                          Math.max(1, Math.min(MAX_SHUFFLE_DEPTH, Number(e.target.value) || 1))
+                        )
+                      }
                       disabled={solveStatus === 'loading'}
                       className="w-10 bg-transparent text-center text-sm font-semibold text-slate-300 outline-none
                         [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -163,6 +176,11 @@ export default function SolvePage() {
                   <button
                     onClick={handleShuffle}
                     disabled={solveStatus === 'loading'}
+                    title={
+                      shuffleDepth >= SLOW_SHUFFLE_DEPTH
+                        ? `Depth ${shuffleDepth} can take 10-30s to solve`
+                        : `Scramble ${shuffleDepth} moves`
+                    }
                     className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold
                       bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors border border-white/5"
                   >

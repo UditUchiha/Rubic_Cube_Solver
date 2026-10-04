@@ -62,12 +62,15 @@ void PatternDatabase::toFile(const string &filePath) const {
     ofstream writer(filePath, ios::out | ios::binary | ios::trunc);
 
     if(!writer.is_open())
-        throw "Failed to open the file to write";
+        throw runtime_error("Failed to open '" + filePath + "' for writing");
 
     writer.write(
             reinterpret_cast<const char*>(this->database.data()),
             this->database.storageSize()
             );
+
+    if(!writer.good())
+        throw runtime_error("Failed while writing '" + filePath + "'");
 
     writer.close();
 }
@@ -76,24 +79,41 @@ void PatternDatabase::toFile(const string &filePath) const {
 // else return false
 
 bool PatternDatabase::fromFile(const string &filePath) {
-    ifstream reader(filePath, ios::in | ios::ate);
+    // ios::binary is REQUIRED. Without it the stream opens in text mode on
+    // Windows, where the CRT stops at the first 0x1A (Ctrl-Z) byte and
+    // collapses CRLF pairs. The corner database contains a 0x1A at offset
+    // 18108360, so a text-mode read silently returned only 41% of the file
+    // and left the rest at the 0xFF "unknown" fill -- which the IDA*
+    // heuristic reads as 0, degrading the search to uninformed IDDFS.
+    ifstream reader(filePath, ios::in | ios::binary | ios::ate);
 
     if(!reader.is_open())
         return false;
 
-    size_t fileSize = reader.tellg();
+    const size_t expected = this->database.storageSize();
+    const streamoff fileSize = reader.tellg();
 
-    if(fileSize != this->database.storageSize()){
+    if(fileSize < 0 || (size_t)fileSize != expected){
         reader.close();
-        throw "Database corrupt! Failed to open Reader";
+        throw runtime_error(
+                "Database '" + filePath + "' is corrupt: expected " +
+                to_string(expected) + " bytes, found " + to_string(fileSize));
     }
 
     reader.seekg(0, ios::beg);
     reader.read(
             reinterpret_cast<char*> (this->database.data()),
-            this->database.storageSize()
+            expected
             );
+
+    const size_t got = (size_t)reader.gcount();
     reader.close();
+
+    if(got != expected)
+        throw runtime_error(
+                "Database '" + filePath + "' was truncated on read: got " +
+                to_string(got) + " of " + to_string(expected) + " bytes");
+
     this->numItems = this->size;
     return true;
 }

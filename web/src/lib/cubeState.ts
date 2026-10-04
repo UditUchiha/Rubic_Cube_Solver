@@ -79,6 +79,19 @@ const EDGES: [number, number][] = [
   [41, 12], // BL: B[1][2], L[1][0]
 ];
 
+const CORNER_NAMES = ['UFR', 'UFL', 'UBL', 'UBR', 'DFR', 'DFL', 'DBR', 'DBL'] as const;
+const EDGE_NAMES = ['UF', 'UR', 'UB', 'UL', 'DF', 'DR', 'DB', 'DL', 'FR', 'FL', 'BR', 'BL'] as const;
+
+/*
+ * Chirality of each corner slot, in the CORNERS order above. Taking the three
+ * face normals in the order each triple lists them, UFR/UBL/DFL/DBR form a
+ * right-handed cycle and UFL/UBR/DFR/DBL a left-handed one. Corner twist is
+ * only invariant once the left-handed slots are counted the other way round -
+ * summed raw, the total spreads evenly over 0/1/2 and carries no information.
+ * Mirrors CORNER_CHIRALITY in Model/CubeValidation.h.
+ */
+const CORNER_CHIRALITY = [+1, -1, +1, -1, -1, +1, +1, -1];
+
 function getCornerPieceId(state: CubeState, ci: number): number {
   const colors = CORNERS[ci].map((p) => state[p]);
   let id = 0;
@@ -95,6 +108,38 @@ function getEdgePieceId(state: CubeState, ei: number): number {
   return lo * 6 + hi;
 }
 
+/*
+ * Twist of the corner sitting in slot `ci`: how far its white/yellow sticker is
+ * from the slot's U/D facelet, corrected for the slot's chirality. Returns -1
+ * when the slot does not hold a real corner.
+ */
+function getCornerTwist(state: CubeState, ci: number): number {
+  const colors = CORNERS[ci].map((p) => state[p]);
+  const udCount = colors.filter((c) => c === 0 || c === 5).length;
+  if (udCount !== 1) return -1;
+  const at = colors.findIndex((c) => c === 0 || c === 5);
+  return CORNER_CHIRALITY[ci] > 0 ? at : (3 - at) % 3;
+}
+
+/*
+ * Flip of the edge sitting in slot `ei`: 0 when its reference sticker faces the
+ * slot's reference facelet. For an edge carrying white or yellow the reference
+ * sticker is that one; for the four equatorial edges it is red or orange.
+ * Returns -1 when the slot does not hold a real edge.
+ */
+function getEdgeFlip(state: CubeState, ei: number): number {
+  const [a, b] = EDGES[ei];
+  const c1 = state[a];
+  const c2 = state[b];
+  const isUD = (c: Color) => c === 0 || c === 5; // White / Yellow
+  const isFB = (c: Color) => c === 2 || c === 4; // Red / Orange
+  if (isUD(c1) && isUD(c2)) return -1; // white+yellow is not a real edge
+  if (isUD(c1) || isUD(c2)) return isUD(c1) ? 0 : 1;
+  if (isFB(c1) && isFB(c2)) return -1; // red+orange is not a real edge
+  if (isFB(c1) || isFB(c2)) return isFB(c1) ? 0 : 1;
+  return -1; // green+blue is not a real edge
+}
+
 function permParity(perm: number[]): number {
   const visited = new Array(perm.length).fill(false);
   let swaps = 0;
@@ -107,19 +152,68 @@ function permParity(perm: number[]): number {
   return swaps % 2;
 }
 
-function checkPermutationParity(state: CubeState): boolean {
-  // Build solved-state piece-id arrays as canonical indices
+/*
+ * The three laws that decide whether a coloured-in cube can actually be turned
+ * back to solved. Nine of each colour plus correct centres only narrows things
+ * to a set twelve times larger than the reachable one; these checks pick out
+ * the reachable twelfth.
+ *
+ * Worth doing properly on the client: the solver cannot fail fast on an
+ * impossible cube. It searches all the way to the God's-number bound, holding
+ * the single solver process until the request times out, so a cube rejected
+ * here saves the user a minute of waiting for an error.
+ */
+function checkCubeLaws(state: CubeState): string[] {
   const solved = createSolvedState();
-  const solvedCIds = CORNERS.map((_, i) => getCornerPieceId(solved, i));
-  const solvedEIds = EDGES.map((_, i) => getEdgePieceId(solved, i));
+  const cIdToPos = new Map(CORNERS.map((_, i) => [getCornerPieceId(solved, i), i]));
+  const eIdToPos = new Map(EDGES.map((_, i) => [getEdgePieceId(solved, i), i]));
 
-  const cIdToPos = new Map(solvedCIds.map((id, pos) => [id, pos]));
-  const eIdToPos = new Map(solvedEIds.map((id, pos) => [id, pos]));
+  const cPerm: number[] = [];
+  const ePerm: number[] = [];
+  const cSeen = new Set<number>();
+  const eSeen = new Set<number>();
+  let twistSum = 0;
+  let flipSum = 0;
 
-  const cPerm = CORNERS.map((_, i) => cIdToPos.get(getCornerPieceId(state, i)) ?? i);
-  const ePerm = EDGES.map((_, i) => eIdToPos.get(getEdgePieceId(state, i)) ?? i);
+  for (let i = 0; i < 8; i++) {
+    const twist = getCornerTwist(state, i);
+    const home = cIdToPos.get(getCornerPieceId(state, i));
+    if (twist === -1 || home === undefined) {
+      return [`The ${CORNER_NAMES[i]} corner has an impossible colour combination`];
+    }
+    if (cSeen.has(home)) {
+      return [`Two corners have the same colours (see ${CORNER_NAMES[i]})`];
+    }
+    cSeen.add(home);
+    cPerm.push(home);
+    twistSum += twist;
+  }
 
-  return permParity(cPerm) === permParity(ePerm);
+  for (let i = 0; i < 12; i++) {
+    const flip = getEdgeFlip(state, i);
+    const home = eIdToPos.get(getEdgePieceId(state, i));
+    if (flip === -1 || home === undefined) {
+      return [`The ${EDGE_NAMES[i]} edge has an impossible colour combination`];
+    }
+    if (eSeen.has(home)) {
+      return [`Two edges have the same colours (see ${EDGE_NAMES[i]})`];
+    }
+    eSeen.add(home);
+    ePerm.push(home);
+    flipSum += flip;
+  }
+
+  const errors: string[] = [];
+  if (twistSum % 3 !== 0) {
+    errors.push('A corner is twisted in place - rotate one corner to fix it');
+  }
+  if (flipSum % 2 !== 0) {
+    errors.push('An edge is flipped in place - turn one edge around to fix it');
+  }
+  if (permParity(cPerm) !== permParity(ePerm)) {
+    errors.push('Two pieces are swapped - corner and edge parity disagree');
+  }
+  return errors;
 }
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -149,11 +243,10 @@ export function validate(state: CubeState): ValidationResult {
     }
   }
 
-  // Only run parity check when counts and centers are valid
+  // The piece-level laws only mean anything once colour counts and centres are
+  // right, so they run last.
   if (errors.length === 0) {
-    if (!checkPermutationParity(state)) {
-      errors.push('Permutation parity error — two pieces have been swapped');
-    }
+    errors.push(...checkCubeLaws(state));
   }
 
   return { valid: errors.length === 0, errors };
@@ -338,16 +431,34 @@ const MOVE_FACE: Record<string, number> = {
   'D': 5, "D'": 5, 'D2': 5,
 };
 
-export function generateScramble(moveCount = 20): { state: CubeState; moves: string[] } {
+/*
+ * Default depth is 12, not 20. The solver returns a provably optimal solution,
+ * and that costs roughly 5-8x more per extra move: 12 comes back in well under
+ * a second, 13 takes 10-20s, and from about 15 it runs past any request
+ * timeout worth setting. A 20-move scramble simply never came back.
+ */
+export function generateScramble(moveCount = 12): { state: CubeState; moves: string[] } {
   let state = createSolvedState();
   const moves: string[] = [];
   let lastFace = -1;
+  let beforeLastFace = -1;
+
+  // Opposite faces commute, so U D U collapses to two moves. Skipping both the
+  // same face twice running and a face repeated across a commuting pair keeps a
+  // depth-N scramble genuinely about N moves deep instead of quietly shallower.
+  const OPPOSITE: Record<number, number> = { 0: 5, 5: 0, 1: 3, 3: 1, 2: 4, 4: 2 };
 
   while (moves.length < moveCount) {
-    const candidates = ALL_MOVES.filter((m) => MOVE_FACE[m] !== lastFace);
+    const candidates = ALL_MOVES.filter((m) => {
+      const f = MOVE_FACE[m];
+      if (f === lastFace) return false;
+      if (f === beforeLastFace && OPPOSITE[lastFace] === f) return false;
+      return true;
+    });
     const move = candidates[Math.floor(Math.random() * candidates.length)];
     state = applyMove(state, move);
     moves.push(move);
+    beforeLastFace = lastFace;
     lastFace = MOVE_FACE[move];
   }
 

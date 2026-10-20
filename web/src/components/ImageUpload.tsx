@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { CubeState, Color, COLOR_HEX, COLOR_NAMES, FACE_NAMES } from '@/lib/cubeState';
 import { sampleRegionRGB, assignFaceColors, buildReferences, RGB } from '@/lib/colorClassifier';
-import { FACE_ORIENTATION, Overrides, ScanResult, dropFace, finishScan } from '@/lib/scan';
+import { FACE_ORIENTATION, Overrides, ScanResult, dropFace, finishScan, matchPhotosToFaces } from '@/lib/scan';
 import FaceColorGrid from './FaceColorGrid';
 import clsx from 'clsx';
 
@@ -38,6 +38,39 @@ function toCanvas(img: HTMLImageElement): CanvasRenderingContext2D {
   return ctx;
 }
 
+interface LoadedPhoto {
+  url: string;
+  ctx: CanvasRenderingContext2D;
+}
+
+/* Validate and decode one photo into a downscaled canvas. Throws an Error with a user-facing message. */
+async function loadPhoto(file: File): Promise<LoadedPhoto> {
+  // Desktop browsers often report an iPhone .heic as type '', so go by name too.
+  const heic = /\.hei[cf]$/i.test(file.name) || /hei[cf]/i.test(file.type);
+  if (!heic && !file.type.startsWith('image/')) throw new Error(`${file.name} is not an image.`);
+  if (file.size > MAX_FILE_BYTES) throw new Error(`${file.name} is larger than 20 MB.`);
+
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.src = url;
+  try {
+    await img.decode();
+  } catch {
+    URL.revokeObjectURL(url);
+    // Safari decodes HEIC itself, so it is only rejected once decoding fails.
+    throw new Error(heic
+      ? 'This browser can\'t open HEIC photos. Use Safari, or export the photo as JPEG.'
+      : `${file.name} could not be read.`);
+  }
+  return { url, ctx: toCanvas(img) };
+}
+
+/* Starting grid: 60% of the short side, centred. People centre the cube, so its centre sticker is usually here. */
+function defaultGrid(w: number, h: number) {
+  const gridSize = Math.floor(Math.min(w, h) * 0.6);
+  return { gridSize, gridX: Math.floor((w - gridSize) / 2), gridY: Math.floor((h - gridSize) / 2) };
+}
+
 function extract(
   ctx: CanvasRenderingContext2D, gridX: number, gridY: number, gridSize: number, faceIdx: number,
   allFaces: (FaceData | null)[]
@@ -62,11 +95,22 @@ function extract(
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+/* Opens the rear camera on phones. Hidden where a mouse is used: desktop ignores `capture` and shows a file picker. */
+function TakePhoto({ onChange, className }: { onChange: React.ChangeEventHandler<HTMLInputElement>; className: string }) {
+  return (
+    <label className={clsx(className, 'text-center bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-semibold cursor-pointer transition-colors [@media(pointer:fine)]:hidden')}>
+      Take photo
+      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onChange} />
+    </label>
+  );
+}
+
 export default function ImageUpload({ onComplete }: Props) {
   const [faces, setFaces] = useState<(FaceData | null)[]>(Array(6).fill(null));
   const [activeFace, setActiveFace] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [matchNote, setMatchNote] = useState<string | null>(null);
   const [overrides, setOverrides] = useState<Overrides>({});
   const [failed, setFailed] = useState<ScanResult | null>(null);
 
@@ -84,58 +128,65 @@ export default function ImageUpload({ onComplete }: Props) {
     facesRef.current.forEach((f) => { if (f) URL.revokeObjectURL(f.imgUrl); });
   }, []);
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!file) return;
-
+    if (files.length === 0) return;
     setFileError(null);
-    if (!file.type.startsWith('image/')) {
-      setFileError('That file is not an image.');
-      return;
-    }
-    if (file.size > MAX_FILE_BYTES) {
-      setFileError('That image is larger than 20 MB.');
+    setMatchNote(null);
+
+    // Decide the target faces now. This used to read `activeFace` after the
+    // async decode, so switching tabs meanwhile wrote the colours onto
+    // whichever face happened to be selected by then. One photo replaces the
+    // active face; six or more refill every face; otherwise the empty ones.
+    const targets = files.length === 1 ? [activeFace]
+      : files.length >= 6 ? [0, 1, 2, 3, 4, 5]
+      : faces.flatMap((f, i) => (f ? [] : [i]));
+    if (files.length > 6 || files.length > targets.length) {
+      setFileError(files.length > 6
+        ? 'Pick at most 6 photos, one per face.'
+        : `Only ${targets.length} faces are left to fill. Pick up to ${targets.length} photos, or all 6.`);
       return;
     }
 
-    // Capture the target face now. This used to read `activeFace` inside the
-    // async onload handler, so switching tabs while a photo decoded wrote the
-    // colours onto whichever face happened to be selected by then.
-    const targetFace = activeFace;
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-
-    img.onload = () => {
-      const ctx = toCanvas(img);
+    const settled = await Promise.allSettled(files.map(loadPhoto));
+    const failure = settled.find((s): s is PromiseRejectedResult => s.status === 'rejected');
+    if (failure) {
+      settled.forEach((s) => { if (s.status === 'fulfilled') URL.revokeObjectURL(s.value.url); });
+      setFileError(failure.reason instanceof Error ? failure.reason.message : 'A photo could not be read.');
+      return;
+    }
+    const photos = settled.map((s) => {
+      const { url, ctx } = (s as PromiseFulfilledResult<LoadedPhoto>).value;
       const { width: w, height: h } = ctx.canvas;
-      const gridSize = Math.floor(Math.min(w, h) * 0.6);
-      const gridX = Math.floor((w - gridSize) / 2);
-      const gridY = Math.floor((h - gridSize) / 2);
+      return { url, ctx, w, h, ...defaultGrid(w, h) };
+    });
 
-      imageCache.current.set(targetFace, ctx);
+    // The default grid's centre cell is the photo's centre.
+    const assigned = files.length === 1 ? targets : matchPhotosToFaces(photos.map((p) => {
+      const probe = Math.max(4, Math.round((p.gridSize / 3) * 0.3));
+      return sampleRegionRGB(p.ctx, p.w / 2, p.h / 2, probe, probe);
+    }), targets);
 
-      setFaces((prev) => {
-        const old = prev[targetFace];
-        if (old) URL.revokeObjectURL(old.imgUrl);
-
-        const next = [...prev];
-        next[targetFace] = {
-          imgUrl: url, w, h, gridX, gridY, gridSize,
-          ...extract(ctx, gridX, gridY, gridSize, targetFace, prev),
+    photos.forEach((p, i) => imageCache.current.set(assigned[i], p.ctx));
+    setFaces((prev) => {
+      const next = [...prev];
+      photos.forEach((p, i) => {
+        const face = assigned[i];
+        if (next[face]) URL.revokeObjectURL(next[face]!.imgUrl);
+        next[face] = {
+          imgUrl: p.url, w: p.w, h: p.h, gridX: p.gridX, gridY: p.gridY, gridSize: p.gridSize,
+          ...extract(p.ctx, p.gridX, p.gridY, p.gridSize, face, next),
         };
-        return next;
       });
-      setOverrides((o) => dropFace(o, targetFace));
-      setFailed(null);
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      setFileError('That image could not be read.');
-    };
-
-    img.src = url;
+      return next;
+    });
+    setOverrides((o) => assigned.reduce((acc, face) => dropFace(acc, face), o));
+    setFailed(null);
+    if (files.length > 1) {
+      setActiveFace(assigned[0]);
+      setMatchNote('Photos were matched to faces by centre colour. Check each tab.');
+    }
   }
 
   /* Move or resize one face's grid and re-read its colours straight away. */
@@ -327,22 +378,30 @@ export default function ImageUpload({ onComplete }: Props) {
             />
           </label>
 
-          <label className="py-2 text-center bg-slate-700 hover:bg-slate-600 rounded-lg text-sm cursor-pointer transition-colors">
-            Replace Photo
-            <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-          </label>
+          <div className="flex gap-2">
+            <label className="flex-1 py-2 text-center bg-slate-700 hover:bg-slate-600 rounded-lg text-sm cursor-pointer transition-colors">
+              Replace Photo
+              <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+            </label>
+            <TakePhoto onChange={handleFileChange} className="flex-1 py-2" />
+          </div>
         </div>
       ) : (
-        <label className="flex flex-col items-center justify-center h-32 bg-slate-800/50 border-2 border-dashed border-slate-600 hover:border-slate-400 rounded-xl cursor-pointer transition-colors">
-          <span className="text-2xl mb-1">📷</span>
-          <span className="text-sm text-slate-400">Click to upload a photo</span>
-          <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-        </label>
+        <div className="flex flex-col gap-2">
+          <label className="flex flex-col items-center justify-center gap-1 h-32 px-4 text-center bg-slate-800/50 border-2 border-dashed border-slate-600 hover:border-slate-400 rounded-xl cursor-pointer transition-colors">
+            <span className="text-2xl">📷</span>
+            <span className="text-sm text-slate-300">Choose photos</span>
+            <span className="text-xs text-slate-500">Pick all six at once and they are matched to faces by centre colour</span>
+            <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
+          </label>
+          <TakePhoto onChange={handleFileChange} className="py-2.5" />
+        </div>
       )}
 
       {fileError && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-300">{fileError}</div>
       )}
+      {matchNote && <p className="text-xs text-indigo-300" role="status">{matchNote}</p>}
 
       {currentFace && (
         <div className="flex flex-col gap-2">

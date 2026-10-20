@@ -2,8 +2,9 @@
 import assert from 'node:assert/strict';
 import { generateScramble, COLOR_HEX } from '../src/lib/cubeState';
 import type { CubeState, Color } from '../src/lib/cubeState';
+import { defaultCosts } from '../src/lib/colorClassifier';
 import type { RGB } from '../src/lib/colorClassifier';
-import { finishScan, dropFace } from '../src/lib/scan';
+import { finishScan, dropFace, matchPhotosToFaces } from '../src/lib/scan';
 
 let seed = 1; // mulberry32, so the run is repeatable
 Math.random = () => { seed |= 0; seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -39,5 +40,18 @@ assert.deepEqual(r.state, state);
 assert.deepEqual(r.notes, []);
 
 assert.deepEqual(dropFace({ 3: 1, 12: 2, 20: 0 } as Record<number, Color>, 1), { 3: 1, 20: 0 });
+
+// Photos picked in any order land on their faces by centre colour.
+const order = [3, 0, 5, 1, 4, 2];
+assert.deepEqual(matchPhotosToFaces(order.map((c) => hexToRgb(COLOR_HEX[c])), [0, 1, 2, 3, 4, 5]), order);
+// Fewer photos than faces: only the given faces are used.
+assert.deepEqual(matchPhotosToFaces([hexToRgb(COLOR_HEX[5])], [2, 5]), [5]);
+// Under warm light a red centre can sit nearer orange than red on its own; matched
+// together with the real orange, the redder one still gets red.
+const warmRed: RGB = [255, 90, 30], warmOrange: RGB = [255, 140, 20];
+const nearest = (s: RGB) => { const c = defaultCosts(s); return c.indexOf(Math.min(...c)); };
+assert.equal(nearest(warmRed), 4, 'test premise: warm red alone reads as orange');
+assert.equal(nearest(warmOrange), 4);
+assert.deepEqual(matchPhotosToFaces([warmOrange, warmRed], [2, 4]), [4, 2]);
 
 console.log('scan self-check passed');

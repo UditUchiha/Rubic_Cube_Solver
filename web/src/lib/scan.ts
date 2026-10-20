@@ -1,6 +1,6 @@
 import { FACE_NAMES, validate } from './cubeState';
 import type { CubeState, Color } from './cubeState';
-import { assignCubeColors } from './colorClassifier';
+import { assignCubeColors, defaultCosts } from './colorClassifier';
 import type { RGB } from './colorClassifier';
 
 /*
@@ -21,6 +21,25 @@ export const FACE_ORIENTATION: { top: Color; left: Color }[] = [
   { top: 0, left: 3 }, // B (orange): white up,   blue left
   { top: 2, left: 1 }, // D (yellow): red up,     green left
 ];
+
+/*
+ * Assign photos to faces by their centre samples, minimising the total colour
+ * cost over all of them at once - the same idea as the sticker quota: when two
+ * centres both look orange-ish, the redder one still gets red. Brute force over
+ * at most 6! = 720 orderings. Expects centres.length <= faces.length.
+ */
+export function matchPhotosToFaces(centres: RGB[], faces: number[]): number[] {
+  const costs = centres.map(defaultCosts);
+  let best: number[] = [];
+  let bestCost = Infinity;
+  const walk = (i: number, used: number[], cost: number) => {
+    if (cost >= bestCost) return;
+    if (i === centres.length) { best = used; bestCost = cost; return; }
+    for (const f of faces) if (!used.includes(f)) walk(i + 1, [...used, f], cost + costs[i][f]);
+  };
+  walk(0, [], 0);
+  return best;
+}
 
 /* Sticker index (face * 9 + cell) -> colour the user picked by hand. */
 export type Overrides = Record<number, Color>;

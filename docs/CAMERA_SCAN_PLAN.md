@@ -20,10 +20,10 @@ Branch: `feature/camera-scan`, cut from `cpp`. The scanner, classifier and cube-
 | 2.3 | Required orientation drawn on the grid | `WebcamScanner.tsx`, `ImageUpload.tsx` | 0.5h | ✅ Done |
 | 2.4 | Live colour preview + wrong-face warning | `WebcamScanner.tsx` | 1.5h | ✅ Done |
 | 2.5 | Auto-capture when steady (toggle) | `WebcamScanner.tsx` | 1h | ✅ Done |
-| 3.1 | "Take photo" button + HEIC message | `ImageUpload.tsx` | 0.5h | ⬜ Todo |
-| 3.2 | Pick several photos, match faces by centre colour | `ImageUpload.tsx`, `scan.ts`, `colorClassifier.ts` | 1.5h | ⬜ Todo |
-| 3.3 | Auto-place the grid on the cube (gated on fixtures) | `web/src/lib/locateGrid.ts` (new) | 3h + photos | ⬜ Todo |
-| 4   | Docs: CLAUDE.md "Scan input" | `CLAUDE.md` | 10m | ⬜ Todo |
+| 3.1 | "Take photo" button + HEIC message | `ImageUpload.tsx` | 0.5h | ✅ Done |
+| 3.2 | Pick several photos, match faces by centre colour | `ImageUpload.tsx`, `scan.ts`, `colorClassifier.ts` | 1.5h | ✅ Done |
+| 3.3 | Auto-place the grid on the cube (gated on fixtures) | `web/src/lib/locateGrid.ts` (new) | 3h + photos | ⏸ Blocked: needs ~12 real photos |
+| 4   | Docs: CLAUDE.md "Scan input" | `CLAUDE.md` | 10m | ✅ Done |
 |     | **Total** | | **~14h** | |
 
 Phase 1 ships on its own. Phase 2 and 3 items are independent of each other, but each assumes Phase 1 is done.

@@ -74,6 +74,12 @@ export function classifyColor(r: number, g: number, b: number, references = DEFA
   return best;
 }
 
+/* Cost of `sample` against each default colour, for matching photos to faces before any calibration exists. */
+export function defaultCosts([r, g, b]: RGB): number[] {
+  const hsv = rgbToHsv(r, g, b);
+  return DEFAULT_REFERENCES.map((ref) => colorDistance(hsv, ref));
+}
+
 /*
  * Assign colours to a group of samples under a quota: at most `perColor` of
  * each. A Rubik's cube has exactly nine stickers of every colour, and a face

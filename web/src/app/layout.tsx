@@ -6,10 +6,18 @@ export const metadata: Metadata = {
   description: "Solve any Rubik's Cube in seconds with IDA* AI",
 };
 
+// Runs before first paint so a dark-mode visitor never sees a light flash.
+// A saved choice wins; otherwise follow the OS. Kept in sync with ThemeToggle.
+const THEME_SCRIPT = `try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark" style={{ colorScheme: 'dark' }}>
-      <body className="antialiased bg-gray-950 text-gray-100 min-h-screen">
+    // The script edits <html>'s class before React hydrates.
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
+      <body className="antialiased min-h-screen">
         {children}
       </body>
     </html>

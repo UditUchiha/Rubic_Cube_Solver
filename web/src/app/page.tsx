@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import RubiksCube3D from '@/components/RubiksCube3D';
+import Header from '@/components/Header';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -39,6 +40,8 @@ const FEATURES = [
 
 export default function Home() {
   return (
+    <>
+    <Header />
     <main className="relative min-h-screen flex flex-col overflow-hidden" style={{ background: 'var(--bg)' }}>
 
       {/* ── Aurora background ────────────────────────────────────────────── */}
@@ -53,7 +56,7 @@ export default function Home() {
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.03]"
         style={{
-          backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
+          backgroundImage: 'linear-gradient(var(--grid-line) 1px, transparent 1px), linear-gradient(90deg, var(--grid-line) 1px, transparent 1px)',
           backgroundSize: '64px 64px',
         }}
       />
@@ -64,7 +67,7 @@ export default function Home() {
         {/* Badge */}
         <div className="animate-fade-in-up mb-6">
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-widest"
-            style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc' }}>
+            style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)', color: 'var(--accent-text)' }}>
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse inline-block" />
             Kubrick
           </span>
@@ -81,13 +84,13 @@ export default function Home() {
         <h1 className="animate-fade-in-up-d2 text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight mb-4 text-balance">
           <span className="gradient-text">Solve Any Rubik&apos;s Cube</span>
           <br />
-          <span className="text-white">in Seconds</span>
+          <span className="text-fg">in Seconds</span>
         </h1>
 
         {/* Subtitle */}
         <p className="animate-fade-in-up-d3 max-w-xl text-base sm:text-lg text-slate-400 mb-8 text-balance">
           Paint your scrambled cube, hit Solve — we find the{' '}
-          <span className="text-white font-medium">shortest possible solution</span> using
+          <span className="text-fg font-medium">shortest possible solution</span> using
           86 MB of pattern databases and iterative-deepening A*.
         </p>
 
@@ -96,7 +99,7 @@ export default function Home() {
           <Link
             href="/solve"
             id="solve-cta-btn"
-            className="btn-shimmer inline-flex items-center gap-2 px-8 py-3.5 rounded-2xl text-base sm:text-lg font-semibold transition-all duration-300
+            className="btn-shimmer inline-flex items-center gap-2 text-white px-8 py-3.5 rounded-2xl text-base sm:text-lg font-semibold transition-all duration-300
               hover:scale-105 hover:-translate-y-0.5 active:scale-95
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
             style={{
@@ -121,7 +124,7 @@ export default function Home() {
               className="glass rounded-2xl p-3 sm:p-5 flex flex-col items-center text-center gap-0.5 transition-transform duration-300 hover:-translate-y-1"
             >
               <span className="text-xl sm:text-3xl font-extrabold gradient-text-indigo">{value}</span>
-              <span className="text-xs sm:text-sm font-semibold text-white">{label}</span>
+              <span className="text-xs sm:text-sm font-semibold text-fg">{label}</span>
               <span className="text-[10px] sm:text-xs text-slate-500 hidden sm:block">{sub}</span>
             </div>
           ))}
@@ -142,7 +145,7 @@ export default function Home() {
                 style={{ borderColor: 'var(--border)' }}
               >
                 <span className="text-2xl">{icon}</span>
-                <span className="text-sm font-semibold text-white">{title}</span>
+                <span className="text-sm font-semibold text-fg">{title}</span>
                 <span className="text-xs text-slate-400 leading-relaxed">{desc}</span>
               </div>
             ))}
@@ -155,5 +158,6 @@ export default function Home() {
         Built with C++ · IDA* · Next.js
       </footer>
     </main>
+    </>
   );
 }

@@ -307,9 +307,9 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
       {/* ── Which face, and crucially which way up ──────────────────────────── */}
       <div className="flex flex-col gap-2 text-center">
         <p className="text-sm">
-          <span className="font-semibold text-white">Face {faceIdx + 1} of 6</span>
+          <span className="font-semibold text-fg">Face {faceIdx + 1} of 6</span>
           <span className="text-slate-400"> — show the </span>
-          <span className="font-semibold" style={{ color: COLOR_HEX[face as Color] }}>
+          <span className="font-semibold swatch-label" style={{ color: COLOR_HEX[face as Color] }}>
             {COLOR_NAMES[face as Color]}
           </span>
           <span className="text-slate-400"> centre ({FACE_NAMES[face]})</span>
@@ -320,7 +320,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
               <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
             </svg>
             top edge:
-            <span className="font-semibold" style={{ color: COLOR_HEX[orientation.top] }}>
+            <span className="font-semibold swatch-label" style={{ color: COLOR_HEX[orientation.top] }}>
               {COLOR_NAMES[orientation.top]}
             </span>
           </span>
@@ -329,7 +329,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
               <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
             </svg>
             left edge:
-            <span className="font-semibold" style={{ color: COLOR_HEX[orientation.left] }}>
+            <span className="font-semibold swatch-label" style={{ color: COLOR_HEX[orientation.left] }}>
               {COLOR_NAMES[orientation.left]}
             </span>
           </span>
@@ -353,7 +353,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
                   'w-10 h-10 rounded border-2 transition-transform',
                   i === 4
                     ? 'border-slate-400 cursor-default'
-                    : 'border-slate-600 hover:border-white hover:scale-110 cursor-pointer'
+                    : 'border-slate-600 hover:border-fg hover:scale-110 cursor-pointer'
                 )}
                 style={{ backgroundColor: COLOR_HEX[color] }}
               />
@@ -363,10 +363,10 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
       )}
 
       {validationErrors.length > 0 && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-300 flex flex-col gap-1">
-          <span className="font-semibold text-red-400">That scan is not a solvable cube</span>
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-700 dark:text-red-300 flex flex-col gap-1">
+          <span className="font-semibold text-red-600 dark:text-red-400">That scan is not a solvable cube</span>
           {validationErrors.map((e, i) => <span key={i}>• {e}</span>)}
-          <button onClick={restart} className="mt-1 text-xs underline text-red-400 hover:text-red-200 self-start">
+          <button onClick={restart} className="mt-1 text-xs underline text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 self-start">
             Re-scan all faces
           </button>
         </div>
@@ -377,7 +377,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
           <>
             <button
               onClick={handleCapture}
-              className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold"
+              className="flex-1 py-2.5 text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold"
             >
               Capture Face
             </button>
@@ -395,7 +395,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
             </button>
             <button
               onClick={handleUseFace}
-              className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold"
+              className="flex-1 py-2.5 text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold"
             >
               {faceIdx < 5 ? 'Use This Face →' : 'Finish'}
             </button>

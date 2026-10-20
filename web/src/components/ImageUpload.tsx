@@ -273,7 +273,7 @@ export default function ImageUpload({ onComplete }: Props) {
               activeFace === i
                 ? 'bg-indigo-600 border-indigo-400 text-white'
                 : faces[i]
-                ? 'bg-green-900/40 border-green-700 text-green-300'
+                ? 'bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
                 : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-400'
             )}
           >
@@ -286,18 +286,18 @@ export default function ImageUpload({ onComplete }: Props) {
       <div className="flex flex-col gap-1">
         <p className="text-sm text-slate-300">
           {FACE_NAMES[activeFace]} —{' '}
-          <span className="font-semibold" style={{ color: COLOR_HEX[activeFace as Color] }}>
+          <span className="font-semibold swatch-label" style={{ color: COLOR_HEX[activeFace as Color] }}>
             {COLOR_NAMES[activeFace as Color]}
           </span>{' '}
           centre
         </p>
         <p className="text-xs text-slate-500">
           Top edge must be{' '}
-          <span className="font-semibold" style={{ color: COLOR_HEX[orientation.top] }}>
+          <span className="font-semibold swatch-label" style={{ color: COLOR_HEX[orientation.top] }}>
             {COLOR_NAMES[orientation.top]}
           </span>
           , left edge{' '}
-          <span className="font-semibold" style={{ color: COLOR_HEX[orientation.left] }}>
+          <span className="font-semibold swatch-label" style={{ color: COLOR_HEX[orientation.left] }}>
             {COLOR_NAMES[orientation.left]}
           </span>
           .
@@ -383,7 +383,7 @@ export default function ImageUpload({ onComplete }: Props) {
       )}
 
       {fileError && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-300">{fileError}</div>
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-700 dark:text-red-300">{fileError}</div>
       )}
 
       {currentFace && (
@@ -400,7 +400,7 @@ export default function ImageUpload({ onComplete }: Props) {
                   'w-10 h-10 rounded border-2 transition-transform',
                   i === 4
                     ? 'border-slate-400 cursor-default opacity-80'
-                    : 'border-slate-600 hover:border-white hover:scale-110 cursor-pointer'
+                    : 'border-slate-600 hover:border-fg hover:scale-110 cursor-pointer'
                 )}
                 style={{ backgroundColor: COLOR_HEX[color] }}
               />
@@ -410,8 +410,8 @@ export default function ImageUpload({ onComplete }: Props) {
       )}
 
       {validationErrors.length > 0 && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-300 flex flex-col gap-1">
-          <span className="font-semibold text-red-400">These photos are not a solvable cube</span>
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-700 dark:text-red-300 flex flex-col gap-1">
+          <span className="font-semibold text-red-600 dark:text-red-400">These photos are not a solvable cube</span>
           {validationErrors.map((e, i) => <span key={i}>• {e}</span>)}
         </div>
       )}
@@ -419,7 +419,7 @@ export default function ImageUpload({ onComplete }: Props) {
       <button
         onClick={handleFinish}
         disabled={!allUploaded}
-        className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-semibold text-sm transition-colors"
+        className="w-full py-3 text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-semibold text-sm transition-colors"
       >
         {allUploaded ? 'Use These Colours' : `Upload all 6 faces (${faces.filter(Boolean).length}/6 done)`}
       </button>

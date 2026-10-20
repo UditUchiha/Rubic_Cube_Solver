@@ -81,8 +81,8 @@ export default function ManualColorPicker({ state, onChange }: Props) {
             className={clsx(
               'rounded-full border-2 transition-all duration-200 flex-shrink-0',
               activeColor === color
-                ? 'scale-125 border-white shadow-lg'
-                : 'border-gray-600 hover:border-gray-300 hover:scale-110'
+                ? 'scale-125 border-fg shadow-lg'
+                : 'border-slate-600 hover:border-slate-300 hover:scale-110'
             )}
             style={{
               width: 28, height: 28,
@@ -105,7 +105,7 @@ export default function ManualColorPicker({ state, onChange }: Props) {
           id="reset-cube-btn"
           onClick={handleReset}
           className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-            text-slate-400 border border-slate-700 hover:border-slate-500 hover:text-white
+            text-slate-400 border border-slate-700 hover:border-slate-500 hover:text-fg
             transition-all duration-200 active:scale-95"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>

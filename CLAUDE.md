@@ -118,3 +118,10 @@ Deployment: Frontend on Vercel, Backend on Render. The backend is now optional â
 `web/src/lib/colorClassifier.ts` classifies all 54 stickers in one pass (`assignCubeColors`) under an exact nine-per-colour quota, using the six centre stickers as live references for the current lighting. Per-sticker threshold classification is kept only for live previews â€” deciding each sticker alone is what makes red and orange flip under warm light.
 
 Each face has a fixed orientation inside the 54-char state. The scanners show the required top and left neighbour colours per face, because a face captured 90 degrees out produces a correctly-coloured, unsolvable cube.
+
+### Theming (ui-threejs branch)
+
+Light/dark via a `dark` class on `<html>`, set before first paint by the inline script in `web/src/app/layout.tsx` (saved choice in `localStorage.theme`, else the OS setting) and flipped by `ThemeToggle`. Tokens live in `web/src/app/globals.css`.
+- `slate-*` is remapped to CSS variables and **reversed in light mode** (`bg-slate-800` is a light panel there), so write neutral classes for the dark look and they adapt. Use `fg` (`text-fg`, `border-fg/10`) for "foreground"; keep `text-white` only on indigo fills, video and photo overlays.
+- Pale accent text needs a light pair: `text-red-600 dark:text-red-400`.
+- The cube net and 3D cube keep their black body in both themes, as a real cube does.

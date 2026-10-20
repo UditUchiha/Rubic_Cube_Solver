@@ -77,8 +77,9 @@ private:
         size_t stored = move_done.size() + frontier;
         if (stored > peakStates) peakStates = stored;
         if (maxStates && stored > maxStates)
-            throw runtime_error("best-first search exceeded its cap of " +
-                                to_string(maxStates) + " stored states");
+            throw runtime_error("This scramble needs more memory than the best-first "
+                                "search is allowed (" + to_string(maxStates) +
+                                " stored states). Try a shallower scramble.");
         if ((++nodesExpanded & 4095) == 0 && haveDeadline &&
             chrono::steady_clock::now() >= deadline)
             throw SolverTimeout("search exceeded its time budget");

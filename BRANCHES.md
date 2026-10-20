@@ -24,7 +24,7 @@ Each feature branch is deployable on its own. None of them merges into another; 
 | Branch | Built on | Adds |
 |---|---|---|
 | `perf/ida-star` | `cpp` | ~4x faster IDA* nodes, multi-threaded search (`SOLVER_THREADS`), `benchmark` command |
-| `feature/best-first` | `cpp` | The original project's priority-queue + hash-map search, now on all three databases. `rubiks_cube_solver <depth> <secs> both` races it against IDA*. Not for Render: memory grows with depth |
+| `feature/best-first` | `cpp` | The original project's priority-queue + hash-map search, on all three databases. `rubiks_cube_solver <depth> <secs> both` races it against IDA*. As a backend: deploy this branch with `SOLVER_ALGO=bestfirst` (`SOLVER_MAX_STATES`, default 1M = ~190 MB, sized for 512 MB). Serves `cpp`/`js`/`ui-threejs` frontends, not `full` (no `mode`/`stats`) |
 | `feature/cpp-two-phase` | `cpp` | Kociemba two-phase in C++; `mode: "fast"` on `/api/solve` |
 | `feature/next-features` | `js` | Tests, notation input, share links, keyboard player, Fast vs Optimal compare, IDA* search report, PWA/offline, Beginner mode |
 | `feature/multi-puzzle` | `js` | `/solve/[puzzle]` registry and an optimal in-browser 2x2 |

@@ -3,6 +3,7 @@
 #include "PatternDatabases/CornerDBMaker.h"
 #include "PatternDatabases/EdgeDBMaker.h"
 #include "Solver/IDAstarSolver.h"
+#include "Solver/BestFirstSolver.h"
 
 using namespace std;
 
@@ -56,13 +57,19 @@ static RubiksCubeBitboard parseCube(const string &input) {
 
 static string solveCube(const string &input, CornerPatternDatabase &cornerDB,
                         EdgePatternDatabase &edge1DB, EdgePatternDatabase &edge2DB,
-                        double timeLimitSeconds) {
+                        double timeLimitSeconds, bool bestFirst, size_t maxStates) {
     RubiksCubeBitboard cube = parseCube(input);
 
     if (cube.isSolved()) return "";
 
-    IDAstarSolver<RubiksCubeBitboard, HashBitboard> solver(cube, cornerDB, edge1DB, edge2DB);
-    vector<RubiksCube::MOVE> moves = solver.solve(timeLimitSeconds);
+    vector<RubiksCube::MOVE> moves;
+    if (bestFirst) {
+        BestFirstSolver<RubiksCubeBitboard, HashBitboard> solver(cube, cornerDB, edge1DB, edge2DB);
+        moves = solver.solve(timeLimitSeconds, maxStates);
+    } else {
+        IDAstarSolver<RubiksCubeBitboard, HashBitboard> solver(cube, cornerDB, edge1DB, edge2DB);
+        moves = solver.solve(timeLimitSeconds);
+    }
 
     // Never hand back a solution we have not checked. A wrong move list is far
     // worse than an error: the user would turn a real cube into a worse mess.
@@ -98,6 +105,14 @@ int main(int argc, char *argv[]) {
         if (parsed > 0.0) timeLimitSeconds = parsed;
     }
 
+    // SOLVER_ALGO=bestfirst swaps IDA* for the memory-hungry best-first search.
+    // Its state cap must fit the host: ~190 bytes per state, so the 1M default
+    // is ~190 MB on top of the 86 MB of databases, safe on a 512 MB instance.
+    const char *algoEnv = getenv("SOLVER_ALGO");
+    bool bestFirst = algoEnv && string(algoEnv) == "bestfirst";
+    size_t maxStates = 1000000;
+    if (const char *env = getenv("SOLVER_MAX_STATES")) maxStates = (size_t)atoll(env);
+
     for (const auto &path : {cornerDBPath, edge1DBPath, edge2DBPath}) {
         ifstream check(path, ios::in | ios::binary);
         if (!check.good()) {
@@ -132,6 +147,7 @@ int main(int argc, char *argv[]) {
     }
 
     cerr << "Per-request time limit: " << timeLimitSeconds << "s" << endl;
+    cerr << "Search: " << (bestFirst ? "best-first, cap " + to_string(maxStates) + " states" : "IDA*") << endl;
     cerr << "READY" << endl;
 
     string line;
@@ -168,7 +184,8 @@ int main(int argc, char *argv[]) {
         }
 
         try {
-            string result = solveCube(line, *cornerDB, *edge1DB, *edge2DB, timeLimitSeconds);
+            string result = solveCube(line, *cornerDB, *edge1DB, *edge2DB, timeLimitSeconds,
+                                      bestFirst, maxStates);
             cout << "SOLUTION: " << result << endl;
             cout.flush();
         } catch (const SolverTimeout &) {

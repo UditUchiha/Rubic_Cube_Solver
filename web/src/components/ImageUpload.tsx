@@ -1,35 +1,26 @@
 'use client';
 
-import { useRef, useState, useEffect, useCallback } from 'react';
-import { CubeState, Color, COLOR_HEX, COLOR_NAMES, FACE_NAMES, validate } from '@/lib/cubeState';
-import { sampleRegionRGB, assignFaceColors, assignCubeColors, buildReferences, RGB } from '@/lib/colorClassifier';
+import { useRef, useState, useEffect } from 'react';
+import { CubeState, Color, COLOR_HEX, COLOR_NAMES, FACE_NAMES } from '@/lib/cubeState';
+import { sampleRegionRGB, assignFaceColors, buildReferences, RGB } from '@/lib/colorClassifier';
+import { FACE_ORIENTATION, Overrides, ScanResult, dropFace, finishScan, matchPhotosToFaces } from '@/lib/scan';
+import FaceColorGrid from './FaceColorGrid';
 import clsx from 'clsx';
 
 interface Props {
-  onComplete: (state: CubeState) => void;
+  onComplete: (state: CubeState, notes: string[]) => void;
 }
 
-/*
- * Each face has a fixed orientation inside the 54-character state. A photo
- * taken of a face rotated 90 degrees yields a correctly coloured, unsolvable
- * cube, so the required top and left neighbours are spelled out per face.
- * Matches FACE_ORIENTATION in WebcamScanner.
- */
-const FACE_ORIENTATION: { top: Color; left: Color }[] = [
-  { top: 4, left: 1 }, // U (white)
-  { top: 0, left: 4 }, // L (green)
-  { top: 0, left: 1 }, // F (red)
-  { top: 0, left: 2 }, // R (blue)
-  { top: 0, left: 3 }, // B (orange)
-  { top: 2, left: 1 }, // D (yellow)
-];
-
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
+// iOS Safari caps a canvas at ~16.7 MP and draws a 24/48 MP photo blank above it.
+const MAX_SIDE = 1600;
 
 interface FaceData {
   imgUrl: string;
-  naturalW: number;
-  naturalH: number;
+  // Size of the downscaled canvas the samples come from. The <img> keeps the
+  // same aspect ratio, so the SVG overlay can use these as its viewBox.
+  w: number;
+  h: number;
   gridX: number;
   gridY: number;
   gridSize: number;
@@ -37,110 +28,183 @@ interface FaceData {
   colors: Color[];
 }
 
+function toCanvas(img: HTMLImageElement): CanvasRenderingContext2D {
+  const scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(img.naturalWidth * scale);
+  canvas.height = Math.round(img.naturalHeight * scale);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return ctx;
+}
+
+interface LoadedPhoto {
+  url: string;
+  ctx: CanvasRenderingContext2D;
+}
+
+/* Validate and decode one photo into a downscaled canvas. Throws an Error with a user-facing message. */
+async function loadPhoto(file: File): Promise<LoadedPhoto> {
+  // Desktop browsers often report an iPhone .heic as type '', so go by name too.
+  const heic = /\.hei[cf]$/i.test(file.name) || /hei[cf]/i.test(file.type);
+  if (!heic && !file.type.startsWith('image/')) throw new Error(`${file.name} is not an image.`);
+  if (file.size > MAX_FILE_BYTES) throw new Error(`${file.name} is larger than 20 MB.`);
+
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.src = url;
+  try {
+    await img.decode();
+  } catch {
+    URL.revokeObjectURL(url);
+    // Safari decodes HEIC itself, so it is only rejected once decoding fails.
+    throw new Error(heic
+      ? 'This browser can\'t open HEIC photos. Use Safari, or export the photo as JPEG.'
+      : `${file.name} could not be read.`);
+  }
+  return { url, ctx: toCanvas(img) };
+}
+
+/* Starting grid: 60% of the short side, centred. People centre the cube, so its centre sticker is usually here. */
+function defaultGrid(w: number, h: number) {
+  const gridSize = Math.floor(Math.min(w, h) * 0.6);
+  return { gridSize, gridX: Math.floor((w - gridSize) / 2), gridY: Math.floor((h - gridSize) / 2) };
+}
+
+function extract(
+  ctx: CanvasRenderingContext2D, gridX: number, gridY: number, gridSize: number, faceIdx: number,
+  allFaces: (FaceData | null)[]
+): { samples: RGB[]; colors: Color[] } {
+  const cell = gridSize / 3;
+  const probe = Math.max(4, Math.round(cell * 0.3));
+  const samples: RGB[] = [];
+  for (let i = 0; i < 9; i++) {
+    const row = Math.floor(i / 3);
+    const col = i % 3;
+    samples.push(
+      sampleRegionRGB(ctx, gridX + col * cell + cell / 2, gridY + row * cell + cell / 2, probe, probe)
+    );
+  }
+
+  const centres: (RGB | null)[] = Array(6).fill(null);
+  allFaces.forEach((f, i) => { if (f) centres[i] = f.samples[4]; });
+  centres[faceIdx] = samples[4];
+
+  return { samples, colors: assignFaceColors(samples, faceIdx, buildReferences(centres)) };
+}
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/* Opens the rear camera on phones. Hidden where a mouse is used: desktop ignores `capture` and shows a file picker. */
+function TakePhoto({ onChange, className }: { onChange: React.ChangeEventHandler<HTMLInputElement>; className: string }) {
+  return (
+    <label className={clsx(className, 'text-center text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-semibold cursor-pointer transition-colors [@media(pointer:fine)]:hidden')}>
+      Take photo
+      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onChange} />
+    </label>
+  );
+}
+
 export default function ImageUpload({ onComplete }: Props) {
   const [faces, setFaces] = useState<(FaceData | null)[]>(Array(6).fill(null));
   const [activeFace, setActiveFace] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [matchNote, setMatchNote] = useState<string | null>(null);
+  const [overrides, setOverrides] = useState<Overrides>({});
+  const [failed, setFailed] = useState<ScanResult | null>(null);
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
-  // Decoded images, kept so moving the grid does not re-decode the file each
-  // time the user lets go of the mouse.
-  const imageCache = useRef<Map<number, HTMLImageElement>>(new Map());
+  // Downscaled pixels per face, kept so moving the grid only re-reads nine
+  // small boxes instead of re-decoding or redrawing the photo.
+  const imageCache = useRef<Map<number, CanvasRenderingContext2D>>(new Map());
 
   // Object URLs are not reclaimed on their own; release them with the component.
-  useEffect(() => {
-    const cache = imageCache.current;
-    return () => {
-      faces.forEach((f) => { if (f) URL.revokeObjectURL(f.imgUrl); });
-      cache.clear();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Read through a ref: the cleanup closure would otherwise see the first render's faces.
+  const facesRef = useRef(faces);
+  facesRef.current = faces;
+  useEffect(() => () => {
+    facesRef.current.forEach((f) => { if (f) URL.revokeObjectURL(f.imgUrl); });
   }, []);
 
-  const extract = useCallback(
-    (img: HTMLImageElement, gridX: number, gridY: number, gridSize: number, faceIdx: number,
-     allFaces: (FaceData | null)[]): { samples: RGB[]; colors: Color[] } => {
-      const canvas = canvasRef.current!;
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-      ctx.drawImage(img, 0, 0);
-
-      const cell = gridSize / 3;
-      const probe = Math.max(4, Math.round(cell * 0.3));
-      const samples: RGB[] = [];
-      for (let i = 0; i < 9; i++) {
-        const row = Math.floor(i / 3);
-        const col = i % 3;
-        samples.push(
-          sampleRegionRGB(ctx, gridX + col * cell + cell / 2, gridY + row * cell + cell / 2, probe, probe)
-        );
-      }
-
-      const centres: (RGB | null)[] = Array(6).fill(null);
-      allFaces.forEach((f, i) => { if (f) centres[i] = f.samples[4]; });
-      centres[faceIdx] = samples[4];
-
-      return { samples, colors: assignFaceColors(samples, faceIdx, buildReferences(centres)) };
-    },
-    []
-  );
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!file) return;
-
+    if (files.length === 0) return;
     setFileError(null);
-    if (!file.type.startsWith('image/')) {
-      setFileError('That file is not an image.');
+    setMatchNote(null);
+
+    // Decide the target faces now. This used to read `activeFace` after the
+    // async decode, so switching tabs meanwhile wrote the colours onto
+    // whichever face happened to be selected by then. One photo replaces the
+    // active face; six or more refill every face; otherwise the empty ones.
+    const targets = files.length === 1 ? [activeFace]
+      : files.length >= 6 ? [0, 1, 2, 3, 4, 5]
+      : faces.flatMap((f, i) => (f ? [] : [i]));
+    if (files.length > 6 || files.length > targets.length) {
+      setFileError(files.length > 6
+        ? 'Pick at most 6 photos, one per face.'
+        : `Only ${targets.length} faces are left to fill. Pick up to ${targets.length} photos, or all 6.`);
       return;
     }
-    if (file.size > MAX_FILE_BYTES) {
-      setFileError('That image is larger than 20 MB.');
+
+    const settled = await Promise.allSettled(files.map(loadPhoto));
+    const failure = settled.find((s): s is PromiseRejectedResult => s.status === 'rejected');
+    if (failure) {
+      settled.forEach((s) => { if (s.status === 'fulfilled') URL.revokeObjectURL(s.value.url); });
+      setFileError(failure.reason instanceof Error ? failure.reason.message : 'A photo could not be read.');
       return;
     }
+    const photos = settled.map((s) => {
+      const { url, ctx } = (s as PromiseFulfilledResult<LoadedPhoto>).value;
+      const { width: w, height: h } = ctx.canvas;
+      return { url, ctx, w, h, ...defaultGrid(w, h) };
+    });
 
-    // Capture the target face now. This used to read `activeFace` inside the
-    // async onload handler, so switching tabs while a photo decoded wrote the
-    // colours onto whichever face happened to be selected by then.
-    const targetFace = activeFace;
-    const url = URL.createObjectURL(file);
-    const img = new Image();
+    // The default grid's centre cell is the photo's centre.
+    const assigned = files.length === 1 ? targets : matchPhotosToFaces(photos.map((p) => {
+      const probe = Math.max(4, Math.round((p.gridSize / 3) * 0.3));
+      return sampleRegionRGB(p.ctx, p.w / 2, p.h / 2, probe, probe);
+    }), targets);
 
-    img.onload = () => {
-      const gridSize = Math.floor(Math.min(img.naturalWidth, img.naturalHeight) * 0.6);
-      const gridX = Math.floor((img.naturalWidth - gridSize) / 2);
-      const gridY = Math.floor((img.naturalHeight - gridSize) / 2);
-
-      imageCache.current.set(targetFace, img);
-
-      setFaces((prev) => {
-        const old = prev[targetFace];
-        if (old) URL.revokeObjectURL(old.imgUrl);
-
-        const { samples, colors } = extract(img, gridX, gridY, gridSize, targetFace, prev);
-        const next = [...prev];
-        next[targetFace] = {
-          imgUrl: url,
-          naturalW: img.naturalWidth,
-          naturalH: img.naturalHeight,
-          gridX, gridY, gridSize, samples, colors,
+    photos.forEach((p, i) => imageCache.current.set(assigned[i], p.ctx));
+    setFaces((prev) => {
+      const next = [...prev];
+      photos.forEach((p, i) => {
+        const face = assigned[i];
+        if (next[face]) URL.revokeObjectURL(next[face]!.imgUrl);
+        next[face] = {
+          imgUrl: p.url, w: p.w, h: p.h, gridX: p.gridX, gridY: p.gridY, gridSize: p.gridSize,
+          ...extract(p.ctx, p.gridX, p.gridY, p.gridSize, face, next),
         };
-        return next;
       });
-    };
+      return next;
+    });
+    setOverrides((o) => assigned.reduce((acc, face) => dropFace(acc, face), o));
+    setFailed(null);
+    if (files.length > 1) {
+      setActiveFace(assigned[0]);
+      setMatchNote('Photos were matched to faces by centre colour. Check each tab.');
+    }
+  }
 
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      setFileError('That image could not be read.');
-    };
-
-    img.src = url;
+  /* Move or resize one face's grid and re-read its colours straight away. */
+  function updateGrid(face: number, patch: { gridX?: number; gridY?: number; gridSize?: number }) {
+    const ctx = imageCache.current.get(face);
+    if (!ctx) return;
+    setFaces((prev) => {
+      const f = prev[face];
+      if (!f) return prev;
+      const gridSize = clamp(patch.gridSize ?? f.gridSize, 40, Math.min(f.w, f.h));
+      const gridX = clamp(patch.gridX ?? f.gridX, 0, f.w - gridSize);
+      const gridY = clamp(patch.gridY ?? f.gridY, 0, f.h - gridSize);
+      const next = [...prev];
+      next[face] = { ...f, gridX, gridY, gridSize, ...extract(ctx, gridX, gridY, gridSize, face, prev) };
+      return next;
+    });
+    setOverrides((o) => dropFace(o, face));
+    setFailed(null);
   }
 
   // ── Grid dragging. Pointer events cover mouse, touch and pen in one path;
@@ -152,8 +216,8 @@ export default function ImageUpload({ onComplete }: Props) {
     if (!svg || !faceData) return null;
     const rect = svg.getBoundingClientRect();
     return {
-      x: ((e.clientX - rect.left) / rect.width) * faceData.naturalW,
-      y: ((e.clientY - rect.top) / rect.height) * faceData.naturalH,
+      x: ((e.clientX - rect.left) / rect.width) * faceData.w,
+      y: ((e.clientY - rect.top) / rect.height) * faceData.h,
     };
   }
 
@@ -170,89 +234,26 @@ export default function ImageUpload({ onComplete }: Props) {
     if (!dragging) return;
     const p = svgPoint(e);
     if (!p) return;
-    setFaces((prev) => {
-      const f = prev[activeFace];
-      if (!f) return prev;
-      const next = [...prev];
-      next[activeFace] = {
-        ...f,
-        gridX: Math.max(0, Math.min(f.naturalW - f.gridSize, p.x - dragOffset.current.x)),
-        gridY: Math.max(0, Math.min(f.naturalH - f.gridSize, p.y - dragOffset.current.y)),
-      };
-      return next;
-    });
-  }
-
-  function onPointerUp() {
-    if (!dragging) return;
-    setDragging(false);
-    reExtract();
-  }
-
-  function reExtract() {
-    const img = imageCache.current.get(activeFace);
-    const f = faces[activeFace];
-    if (!img || !f) return;
-    setFaces((prev) => {
-      const cur = prev[activeFace];
-      if (!cur) return prev;
-      const { samples, colors } = extract(img, cur.gridX, cur.gridY, cur.gridSize, activeFace, prev);
-      const next = [...prev];
-      next[activeFace] = { ...cur, samples, colors };
-      return next;
-    });
-  }
-
-  function resizeGrid(gridSize: number) {
-    setFaces((prev) => {
-      const f = prev[activeFace];
-      if (!f) return prev;
-      const size = Math.max(40, Math.min(Math.min(f.naturalW, f.naturalH), gridSize));
-      const next = [...prev];
-      next[activeFace] = {
-        ...f,
-        gridSize: size,
-        gridX: Math.max(0, Math.min(f.naturalW - size, f.gridX)),
-        gridY: Math.max(0, Math.min(f.naturalH - size, f.gridY)),
-      };
-      return next;
-    });
+    updateGrid(activeFace, { gridX: p.x - dragOffset.current.x, gridY: p.y - dragOffset.current.y });
   }
 
   function cycleCell(cellIdx: number) {
-    if (cellIdx === 4) return;
-    setFaces((prev) => {
-      const f = prev[activeFace];
-      if (!f) return prev;
-      const colors = [...f.colors] as Color[];
-      colors[cellIdx] = ((colors[cellIdx] + 1) % 6) as Color;
-      const next = [...prev];
-      next[activeFace] = { ...f, colors };
-      return next;
-    });
+    const f = faces[activeFace];
+    if (cellIdx === 4 || !f) return;
+    const colors = [...f.colors] as Color[];
+    colors[cellIdx] = ((colors[cellIdx] + 1) % 6) as Color;
+    const next = [...faces];
+    next[activeFace] = { ...f, colors };
+    setFaces(next);
+    setOverrides((o) => ({ ...o, [activeFace * 9 + cellIdx]: colors[cellIdx] }));
+    setFailed(null);
   }
 
   function handleFinish() {
     if (faces.some((f) => !f)) return;
-
-    // Classify all 54 at once: only with the whole cube in hand does the exact
-    // nine-per-colour quota apply, and that is what separates red from orange.
-    const allSamples: RGB[] = [];
-    faces.forEach((f) => f!.samples.forEach((s) => allSamples.push(s)));
-    const assigned = assignCubeColors(allSamples);
-
-    // Per-face manual corrections take priority over the classifier.
-    faces.forEach((f, fi) => {
-      f!.colors.forEach((c, ci) => {
-        const auto = assignFaceColors(f!.samples, fi)[ci];
-        if (c !== auto) assigned[fi * 9 + ci] = c;
-      });
-    });
-    for (let f = 0; f < 6; f++) assigned[f * 9 + 4] = f as Color;
-
-    const { valid, errors } = validate(assigned as CubeState);
-    if (valid) onComplete(assigned as CubeState);
-    else setValidationErrors(errors);
+    const result = finishScan(faces.flatMap((f) => f!.samples), overrides);
+    if (result.errors.length === 0) onComplete(result.state, result.notes);
+    else setFailed(result);
   }
 
   const allUploaded = faces.every((f) => f !== null);
@@ -261,8 +262,6 @@ export default function ImageUpload({ onComplete }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <canvas ref={canvasRef} className="hidden" />
-
       <div className="flex gap-1 flex-wrap">
         {Array.from({ length: 6 }, (_, i) => (
           <button
@@ -312,33 +311,44 @@ export default function ImageUpload({ onComplete }: Props) {
             <svg
               ref={svgRef}
               className={clsx('absolute inset-0 w-full h-full', dragging ? 'cursor-grabbing' : 'cursor-grab')}
-              viewBox={`0 0 ${currentFace.naturalW} ${currentFace.naturalH}`}
+              viewBox={`0 0 ${currentFace.w} ${currentFace.h}`}
               preserveAspectRatio="none"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
+              onPointerUp={() => setDragging(false)}
+              onPointerCancel={() => setDragging(false)}
             >
               <rect
                 x={currentFace.gridX} y={currentFace.gridY}
                 width={currentFace.gridSize} height={currentFace.gridSize}
                 fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.9)"
-                strokeWidth={Math.max(2, currentFace.naturalW / 300)}
+                strokeWidth={Math.max(2, currentFace.w / 300)}
               />
               {[1, 2].map((i) => (
                 <g key={i}>
                   <line
                     x1={currentFace.gridX} y1={currentFace.gridY + (i * currentFace.gridSize) / 3}
                     x2={currentFace.gridX + currentFace.gridSize} y2={currentFace.gridY + (i * currentFace.gridSize) / 3}
-                    stroke="rgba(255,255,255,0.6)" strokeWidth={Math.max(1, currentFace.naturalW / 500)}
+                    stroke="rgba(255,255,255,0.6)" strokeWidth={Math.max(1, currentFace.w / 500)}
                   />
                   <line
                     x1={currentFace.gridX + (i * currentFace.gridSize) / 3} y1={currentFace.gridY}
                     x2={currentFace.gridX + (i * currentFace.gridSize) / 3} y2={currentFace.gridY + currentFace.gridSize}
-                    stroke="rgba(255,255,255,0.6)" strokeWidth={Math.max(1, currentFace.naturalW / 500)}
+                    stroke="rgba(255,255,255,0.6)" strokeWidth={Math.max(1, currentFace.w / 500)}
                   />
                 </g>
               ))}
+              {/* Required neighbour colours inside the top and left edges, clear of the sample boxes. */}
+              <rect
+                x={currentFace.gridX} y={currentFace.gridY}
+                width={currentFace.gridSize} height={(currentFace.gridSize / 3) * 0.12}
+                fill={COLOR_HEX[orientation.top]} stroke="rgba(0,0,0,0.6)" strokeWidth={Math.max(1, currentFace.w / 800)}
+              />
+              <rect
+                x={currentFace.gridX} y={currentFace.gridY}
+                width={(currentFace.gridSize / 3) * 0.12} height={currentFace.gridSize}
+                fill={COLOR_HEX[orientation.left]} stroke="rgba(0,0,0,0.6)" strokeWidth={Math.max(1, currentFace.w / 800)}
+              />
               {/* Show exactly which pixels get sampled. */}
               {Array.from({ length: 9 }, (_, i) => {
                 const cell = currentFace.gridSize / 3;
@@ -360,61 +370,58 @@ export default function ImageUpload({ onComplete }: Props) {
             Grid size
             <input
               type="range"
-              min={Math.round(Math.min(currentFace.naturalW, currentFace.naturalH) * 0.25)}
-              max={Math.round(Math.min(currentFace.naturalW, currentFace.naturalH))}
+              min={Math.round(Math.min(currentFace.w, currentFace.h) * 0.25)}
+              max={Math.round(Math.min(currentFace.w, currentFace.h))}
               value={currentFace.gridSize}
-              onChange={(e) => resizeGrid(Number(e.target.value))}
-              onPointerUp={reExtract}
+              onChange={(e) => updateGrid(activeFace, { gridSize: Number(e.target.value) })}
               className="flex-1 accent-indigo-500"
             />
           </label>
 
-          <label className="py-2 text-center bg-slate-700 hover:bg-slate-600 rounded-lg text-sm cursor-pointer transition-colors">
-            Replace Photo
-            <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-          </label>
+          <div className="flex gap-2">
+            <label className="flex-1 py-2 text-center bg-slate-700 hover:bg-slate-600 rounded-lg text-sm cursor-pointer transition-colors">
+              Replace Photo
+              <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+            </label>
+            <TakePhoto onChange={handleFileChange} className="flex-1 py-2" />
+          </div>
         </div>
       ) : (
-        <label className="flex flex-col items-center justify-center h-32 bg-slate-800/50 border-2 border-dashed border-slate-600 hover:border-slate-400 rounded-xl cursor-pointer transition-colors">
-          <svg className="mb-2 text-slate-400" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
-          <span className="text-sm text-slate-400">Click to upload a photo</span>
-          <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-        </label>
+        <div className="flex flex-col gap-2">
+          <label className="flex flex-col items-center justify-center gap-1 h-32 px-4 text-center bg-slate-800/50 border-2 border-dashed border-slate-600 hover:border-slate-400 rounded-xl cursor-pointer transition-colors">
+            <svg className="mb-1 text-slate-400" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <span className="text-sm text-slate-300">Choose photos</span>
+            <span className="text-xs text-slate-500">Pick all six at once and they are matched to faces by centre colour</span>
+            <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
+          </label>
+          <TakePhoto onChange={handleFileChange} className="py-2.5" />
+        </div>
       )}
 
       {fileError && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-700 dark:text-red-300">{fileError}</div>
       )}
+      {matchNote && <p className="text-xs text-indigo-300" role="status">{matchNote}</p>}
 
       {currentFace && (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-slate-400">Detected colours (tap to correct):</p>
-          <div className="grid gap-1 mx-auto" style={{ gridTemplateColumns: 'repeat(3, 2.5rem)' }}>
-            {currentFace.colors.map((color, i) => (
-              <button
-                key={i}
-                onClick={() => cycleCell(i)}
-                disabled={i === 4}
-                aria-label={`${COLOR_NAMES[color]}${i === 4 ? ' (centre, fixed)' : ''}`}
-                className={clsx(
-                  'w-10 h-10 rounded border-2 transition-transform',
-                  i === 4
-                    ? 'border-slate-400 cursor-default opacity-80'
-                    : 'border-slate-600 hover:border-fg hover:scale-110 cursor-pointer'
-                )}
-                style={{ backgroundColor: COLOR_HEX[color] }}
-              />
-            ))}
-          </div>
+          <FaceColorGrid colors={currentFace.colors} onCycle={cycleCell} />
         </div>
       )}
 
-      {validationErrors.length > 0 && (
+      {failed && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-700 dark:text-red-300 flex flex-col gap-1">
           <span className="font-semibold text-red-600 dark:text-red-400">These photos are not a solvable cube</span>
-          {validationErrors.map((e, i) => <span key={i}>• {e}</span>)}
+          {failed.errors.map((e, i) => <span key={i}>• {e}</span>)}
+          <button
+            onClick={() => onComplete(failed.state, [])}
+            className="mt-1 text-xs underline text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 self-start"
+          >
+            Fix colours in the editor
+          </button>
         </div>
       )}
 

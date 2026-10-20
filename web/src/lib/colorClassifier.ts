@@ -74,6 +74,12 @@ export function classifyColor(r: number, g: number, b: number, references = DEFA
   return best;
 }
 
+/* Cost of `sample` against each default colour, for matching photos to faces before any calibration exists. */
+export function defaultCosts([r, g, b]: RGB): number[] {
+  const hsv = rgbToHsv(r, g, b);
+  return DEFAULT_REFERENCES.map((ref) => colorDistance(hsv, ref));
+}
+
 /*
  * Assign colours to a group of samples under a quota: at most `perColor` of
  * each. A Rubik's cube has exactly nine stickers of every colour, and a face
@@ -219,16 +225,4 @@ export function sampleRegionRGB(
 
   if (kept === 0) return [Math.round(mr), Math.round(mg), Math.round(mb)];
   return [Math.round(sumR / kept), Math.round(sumG / kept), Math.round(sumB / kept)];
-}
-
-/* Backwards-compatible single-sticker sampler. */
-export function sampleRegion(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number
-): Color {
-  const [r, g, b] = sampleRegionRGB(ctx, x, y, w, h);
-  return classifyColor(r, g, b);
 }

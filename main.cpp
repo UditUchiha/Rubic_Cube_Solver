@@ -4,6 +4,7 @@
 #include "Solver/BFSSolver.h"
 #include "Solver/IDDFSSolver.h"
 #include "Solver/IDAstarSolver.h"
+#include "Solver/BestFirstSolver.h"
 #include "PatternDatabases/CornerDBMaker.h"
 #include "PatternDatabases/EdgeDBMaker.h"
 
@@ -61,35 +62,56 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    IDAstarSolver<RubiksCubeBitboard, HashBitboard> solver(
-        cube, cornerDBFile, edge1DBFile, edge2DBFile);
+    // argv[3] picks the search: ida (default), bestfirst, or both on the same
+    // scramble. SOLVER_MAX_STATES caps best-first memory (default 20M states,
+    // roughly 3 GB); 0 removes the cap.
+    string algo = argc >= 4 ? argv[3] : "ida";
+    size_t maxStates = 20000000;
+    if (const char *env = getenv("SOLVER_MAX_STATES")) maxStates = (size_t)atoll(env);
 
-    auto start = chrono::steady_clock::now();
-    vector<RubiksCube::MOVE> moves;
-    try {
-        moves = solver.solve(timeLimitSeconds);
-    } catch (const SolverTimeout &) {
-        auto spent = chrono::duration<double>(chrono::steady_clock::now() - start).count();
-        cout << "Gave up after " << fixed << setprecision(1) << spent << "s ("
-             << solver.getNodesExpanded() << " nodes). A " << shuffleDepth
-             << "-move scramble is beyond this budget - raise it with "
-                "SOLVER_TIME_LIMIT or argv[2], or scramble fewer moves." << endl;
-        return 2;
+    CornerPatternDatabase cornerDB;
+    EdgePatternDatabase edge1DB(0), edge2DB(1);
+    cornerDB.fromFile(cornerDBFile);
+    edge1DB.fromFile(edge1DBFile);
+    edge2DB.fromFile(edge2DBFile);
+
+    bool allOk = true;
+    for (string name : {string("ida"), string("bestfirst")}) {
+        if (algo != name && algo != "both") continue;
+        cout << "\n== " << (name == "ida" ? "IDA* (recursive DFS)" : "Best-first (priority queue + hash map)")
+             << " ==" << endl;
+
+        IDAstarSolver<RubiksCubeBitboard, HashBitboard> ida(cube, cornerDB, edge1DB, edge2DB);
+        BestFirstSolver<RubiksCubeBitboard, HashBitboard> bestFirst(cube, cornerDB, edge1DB, edge2DB);
+
+        auto start = chrono::steady_clock::now();
+        vector<RubiksCube::MOVE> moves;
+        try {
+            moves = name == "ida" ? ida.solve(timeLimitSeconds)
+                                  : bestFirst.solve(timeLimitSeconds, maxStates);
+        } catch (const exception &e) {
+            auto spent = chrono::duration<double>(chrono::steady_clock::now() - start).count();
+            cout << "Gave up after " << fixed << setprecision(1) << spent << "s: " << e.what() << endl;
+            allOk = false;
+            continue;
+        }
+        auto elapsed = chrono::duration<double>(chrono::steady_clock::now() - start).count();
+
+        cout << "Solution (" << moves.size() << " moves): ";
+        for (auto move: moves) cout << RubiksCube::getMove(move) << " ";
+        cout << "\n";
+        cout << "Solved in " << fixed << setprecision(2) << elapsed << "s, "
+             << (name == "ida" ? ida.getNodesExpanded() : bestFirst.getNodesExpanded())
+             << " nodes expanded";
+        if (name == "bestfirst") cout << ", peak " << bestFirst.getPeakStates() << " states stored";
+        cout << endl;
+
+        // Independently confirm the move list really does solve the scramble.
+        RubiksCubeBitboard check = cube;
+        for (auto move: moves) check.move(move);
+        cout << "Verification: " << (check.isSolved() ? "SOLVED" : "*** FAILED ***") << endl;
+        allOk = allOk && check.isSolved();
     }
-    auto elapsed = chrono::duration<double>(chrono::steady_clock::now() - start).count();
 
-    solver.rubiksCube.print();
-    cout << "Solution (" << moves.size() << " moves): ";
-    for (auto move: moves) cout << RubiksCube::getMove(move) << " ";
-    cout << "\n";
-
-    cout << "Solved in " << fixed << setprecision(2) << elapsed << "s, "
-         << solver.getNodesExpanded() << " nodes expanded" << endl;
-
-    // Independently confirm the move list really does solve the scramble.
-    RubiksCubeBitboard check = cube;
-    for (auto move: moves) check.move(move);
-    cout << "Verification: " << (check.isSolved() ? "SOLVED" : "*** FAILED ***") << endl;
-
-    return check.isSolved() ? 0 : 1;
+    return allOk ? 0 : 1;
 }

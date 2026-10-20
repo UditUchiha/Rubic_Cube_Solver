@@ -25,6 +25,7 @@ set(COMMON_SOURCES
         Solver/BFSSolver.h
         Solver/IDDFSSolver.h
         Solver/IDAstarSolver.h
+        Solver/BestFirstSolver.h
         Model/CubeValidation.h
         PatternDatabases/NibbleArray.cpp
         PatternDatabases/NibbleArray.h

@@ -16,6 +16,7 @@ cmake --build build
 # Run solver (shuffles 12 moves by default, then solves)
 .\build\rubiks_cube_solver.exe            # depth 12, 60s budget
 .\build\rubiks_cube_solver.exe 13 120     # depth 13, 120s budget (0 = no limit)
+.\build\rubiks_cube_solver.exe benchmark  # 12 fixed-seed scrambles, depths 10-13: length, nodes, time
 
 # Generate pattern databases (run once, takes hours, needs ~8GB RAM)
 .\build\generate_dbs.exe          # all 3 databases
@@ -48,8 +49,10 @@ All solvers are header-only templates parameterized on `<T, H>` (cube representa
 - **DFSSolver** — depth-limited DFS
 - **BFSSolver** — breadth-first search
 - **IDDFSSolver** — iterative deepening
-- **IDAstarSolver** — Korf's IDA* using 3 pattern databases (corner + 2 edge groups). Two constructors: one taking 3 database file paths (loads its own), one taking database references (shares already-loaded ones — use this when solving repeatedly). Heuristic: `max(cornerDB, edge1DB, edge2DB)`.
-  `solve(timeLimitSeconds)` throws `SolverTimeout` when the budget runs out; `0` means no limit. Always pass a budget in a server context — solve cost grows ~5-8x per extra move (12 moves <1s, 13 ~10-20s, 15 ~10min), so an unbudgeted deep scramble looks indistinguishable from a hang.
+- **IDAstarSolver** — Korf's IDA* using 3 pattern databases (corner + 2 edge groups). Two constructors: one taking 3 database file paths (loads its own), one taking database references (shares already-loaded ones — use this when solving repeatedly). Heuristic: `max(cornerDB, edge1DB, edge2DB)`, stopping at the first database that already cuts the node.
+  `solve(timeLimitSeconds)` throws `SolverTimeout` when the budget runs out; `0` means no limit. Always pass a budget in a server context — solve cost grows ~5-8x per extra move (on a 12-thread desktop: 13 moves <1s, 14 ~3s, 15 ~10-35s), so an unbudgeted deep scramble looks indistinguishable from a hang.
+  Each iteration runs on `SOLVER_THREADS` threads (default: all cores; `1` = the plain sequential search). Threads split the tree at depth 2 by ticket and all search the same bound, so solutions stay optimal. More threads do nothing on a fractional-CPU host such as Render free.
+  Run `benchmark` before and after any solver change: its scrambles are fixed, so a changed solution length means lost optimality, and with `SOLVER_THREADS=1` node counts should not change either unless pruning did.
 
 ### Cube Validation (Model/CubeValidation.h)
 
@@ -111,7 +114,7 @@ This split exists because IDA* cost is exponential in depth and no amount of hos
 - `web/src/components/SolutionPlayer.tsx` — Animated solution playback with controls
 - `web/src/lib/cubeState.ts` — CubeState type, validation, move application
 
-Deployment: Frontend on Vercel, Backend on Render. The backend is now optional — Fast mode works with it down, and `/health` is only pinged when the user selects Optimal, so a free-tier backend isn't woken on every page load. Backend env vars: `SOLVER_PATH`, `CORNER_DB_PATH`, `EDGE1_DB_PATH`, `EDGE2_DB_PATH`, `SOLVER_TIME_LIMIT`, `SOLVER_MAX_QUEUE`, `SOLVER_TIMEOUT`.
+Deployment: Frontend on Vercel, Backend on Render. The backend is now optional — Fast mode works with it down, and `/health` is only pinged when the user selects Optimal, so a free-tier backend isn't woken on every page load. Backend env vars: `SOLVER_PATH`, `CORNER_DB_PATH`, `EDGE1_DB_PATH`, `EDGE2_DB_PATH`, `SOLVER_TIME_LIMIT`, `SOLVER_MAX_QUEUE`, `SOLVER_TIMEOUT`, `SOLVER_THREADS`.
 
 ### Scan input
 

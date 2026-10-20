@@ -17,7 +17,43 @@ import { PUZZLES, getPuzzle } from '@/lib/puzzles';
 
 type SolveStatus = 'idle' | 'loading' | 'solved' | 'error';
 type InputTab = 'manual' | 'notation' | 'camera' | 'upload';
-type SolveMode = 'fast' | 'optimal' | 'beginner';
+// 'fast' is Instant (cubejs in the browser); 'fast-cpp' is this project's own
+// two-phase in C++ on the backend.
+type SolveMode = 'fast' | 'fast-cpp' | 'optimal' | 'beginner';
+const usesBackend = (m: SolveMode) => m === 'optimal' || m === 'fast-cpp';
+
+// What each solver is and what it is built on, shown under the picker and in
+// "How these solvers work".
+const SOLVERS: Record<SolveMode, { label: string; blurb: string; runs: string; result: string; how: string }> = {
+  fast: {
+    label: 'Instant',
+    blurb: "Kociemba's two-phase algorithm from the open-source cubejs library, running in your browser. No server, works offline.",
+    runs: 'Your browser (Web Worker)',
+    result: '~21 moves in ~0.1 s, any scramble',
+    how: 'Phase 1 searches until the cube only needs U, D and half turns of the other faces; phase 2 finishes it using just those moves. Splitting it in two keeps each search small enough to be near-instant.',
+  },
+  'fast-cpp': {
+    label: 'Fast',
+    blurb: 'The same two-phase algorithm, written from scratch in C++ for this project and run on the server.',
+    runs: 'C++ on the server',
+    result: '~22 moves; ~35 ms of search plus the network trip',
+    how: "Same two phases as Instant, but every table and search is this project's own C++, built on the same cube model as the Optimal solver. Every solution is replayed on that model before it is sent.",
+  },
+  optimal: {
+    label: 'Optimal',
+    blurb: "Korf's IDA* search in C++ on the server: provably the fewest moves. Slows down steeply on deep scrambles.",
+    runs: 'C++ on the server, all CPU cores',
+    result: 'Fewest possible moves (at most 20); seconds to minutes',
+    how: 'Iterative-deepening A*: a depth-first search whose move budget grows by one each round. Three precomputed pattern databases (88M corner states, 2 x 42.6M edge states) give a lower bound on the moves left, so hopeless branches are cut early.',
+  },
+  beginner: {
+    label: 'Beginner',
+    blurb: 'Layer by layer, the way people learn to solve it: about 150 moves in seven named stages you can follow on a real cube.',
+    runs: 'Your browser',
+    result: '~150 moves, split into stages',
+    how: 'White cross, white corners, middle layer, then the yellow side in four steps (cross, edges, corner positions, corner twists), each with a few memorable algorithms. Long, but every stage is something a person can learn.',
+  },
+};
 
 // What the IDA* backend reports about its search (see solver_api.cpp).
 type SearchStats = {
@@ -111,7 +147,7 @@ export default function SolvePage({ puzzleId }: { puzzleId: string }) {
   // Only wake the optimal backend if the user actually wants it - on a free
   // tier it sleeps after 15 minutes and takes about a minute to come back.
   useEffect(() => {
-    if (mode !== 'optimal') return;
+    if (!usesBackend(mode)) return;
     const backendUrl = process.env.NEXT_PUBLIC_SOLVER_API_URL || '';
     fetch(`${backendUrl}/health`).catch(() => {});
   }, [mode]);
@@ -223,7 +259,7 @@ export default function SolvePage({ puzzleId }: { puzzleId: string }) {
       const res = await fetch(`${backendUrl}/api/solve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cubeState: serialize(cubeState) }),
+        body: JSON.stringify({ cubeState: serialize(cubeState), mode: which === 'fast-cpp' ? 'fast' : 'optimal' }),
         signal: controller.signal,
       });
       const data = await res.json();
@@ -242,7 +278,7 @@ export default function SolvePage({ puzzleId }: { puzzleId: string }) {
       return {
         error: navigator.onLine
           ? 'Network error — cannot reach the solver server.'
-          : "You're offline. Fast mode still works without a connection.",
+          : "You're offline. Instant and Beginner still work without a connection.",
       };
     }
   }
@@ -275,7 +311,7 @@ export default function SolvePage({ puzzleId }: { puzzleId: string }) {
 
   // Solve the same cube with the other solver, to put the two side by side.
   async function handleCompare() {
-    const other: SolveMode = shown === 'fast' ? 'optimal' : 'fast';
+    const other = compareTarget(shown, results);
     const gen = cubeGenRef.current;
     setComparing(true);
     const result = await solveWith(other);
@@ -447,32 +483,25 @@ export default function SolvePage({ puzzleId }: { puzzleId: string }) {
                     stretch
                     value={mode}
                     onChange={setMode}
-                    options={[
-                      { value: 'fast' as SolveMode, label: <>Fast<span className="hidden sm:inline font-normal opacity-70"> · ~21 moves</span></> },
-                      { value: 'optimal' as SolveMode, label: <>Optimal<span className="hidden sm:inline font-normal opacity-70"> · fewest</span></> },
-                      { value: 'beginner' as SolveMode, label: <>Beginner<span className="hidden sm:inline font-normal opacity-70"> · step by step</span></> },
-                    ]}
+                    options={(['fast', 'fast-cpp', 'optimal', 'beginner'] as SolveMode[]).map((m) => ({ value: m, label: SOLVERS[m].label }))}
                   />
 
                   <p className="text-[11px] text-slate-500 leading-relaxed">
-                    {mode === 'beginner' ? (
-                      <>Layer by layer, the way people learn to solve it: about 150 moves in seven
-                      named stages you can follow on a real cube.</>
-                    ) : mode === 'fast' ? (
-                      solverStatus === 'ready' ? (
-                        <>Two-phase solver, running in your browser. No server, no waiting.</>
-                      ) : solverStatus === 'unavailable' ? (
-                        <span className="text-amber-600/80 dark:text-amber-400/80">
-                          Your browser cannot run the in-page solver. Switch to Optimal.
-                        </span>
-                      ) : (
-                        <>Preparing the in-browser solver…</>
-                      )
+                    {mode === 'fast' && solverStatus === 'unavailable' ? (
+                      <span className="text-amber-600/80 dark:text-amber-400/80">
+                        Your browser cannot run the in-page solver. Switch to Fast or Optimal.
+                      </span>
+                    ) : mode === 'fast' && solverStatus !== 'ready' ? (
+                      <>Preparing the in-browser solver…</>
                     ) : (
-                      <>Shortest possible solution from the C++ IDA* server. Cost rises steeply with
-                      scramble depth — past {SLOW_SHUFFLE_DEPTH} moves it may time out.</>
+                      <>
+                        {SOLVERS[mode].blurb}
+                        {mode === 'optimal' && ` Past ${SLOW_SHUFFLE_DEPTH} scramble moves it may time out.`}
+                      </>
                     )}
                   </p>
+
+                  <SolverGuide />
                 </div>}
 
                 <button
@@ -487,7 +516,7 @@ export default function SolvePage({ puzzleId }: { puzzleId: string }) {
                   {solveStatus === 'loading' ? (
                     <span className="flex items-center justify-center gap-3">
                       <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      {mode !== 'optimal' ? 'Solving…' : LOADING_MESSAGES[loadingMsgIdx]}
+                      {usesBackend(mode) ? LOADING_MESSAGES[loadingMsgIdx] : 'Solving…'}
                     </span>
                   ) : mode === 'fast' && solverStatus !== 'ready' ? (
                     <span className="flex items-center justify-center gap-3">
@@ -499,7 +528,7 @@ export default function SolvePage({ puzzleId }: { puzzleId: string }) {
                   )}
                 </button>
 
-                {solveStatus === 'loading' && mode === 'optimal' && (
+                {solveStatus === 'loading' && usesBackend(mode) && (
                   <button
                     onClick={handleCancel}
                     className="w-full py-2.5 text-sm font-medium text-slate-400 hover:text-fg bg-slate-800/50 hover:bg-slate-700/50 rounded-lg transition-colors border border-transparent hover:border-slate-600"
@@ -508,7 +537,7 @@ export default function SolvePage({ puzzleId }: { puzzleId: string }) {
                   </button>
                 )}
 
-                {slowLoad && mode === 'optimal' && (
+                {slowLoad && usesBackend(mode) && (
                   <p className="text-xs text-center text-amber-600/80 dark:text-amber-400/80 animate-fade-in-up">
                     <svg className="inline mr-1 -mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                     Server is waking up. This may take up to 45s on the first request.
@@ -629,7 +658,29 @@ export default function SolvePage({ puzzleId }: { puzzleId: string }) {
   );
 }
 
-const MODE_LABEL: Record<SolveMode, string> = { fast: 'Fast', optimal: 'Optimal', beginner: 'Beginner' };
+// Optimal is compared against whichever quick solver ran; anything else
+// against Optimal.
+function compareTarget(shown: SolveMode, results: Partial<Record<SolveMode, SolveResult>>): SolveMode {
+  if (shown !== 'optimal') return 'optimal';
+  return results['fast-cpp'] && !results.fast ? 'fast-cpp' : 'fast';
+}
+
+function SolverGuide() {
+  return (
+    <details className="text-[11px] text-slate-400 bg-slate-900/40 border border-fg/10 rounded-xl px-3 py-2">
+      <summary className="cursor-pointer font-semibold text-slate-300 select-none">How these solvers work</summary>
+      <dl className="mt-2 flex flex-col gap-3">
+        {(['fast', 'fast-cpp', 'optimal', 'beginner'] as SolveMode[]).map((m) => (
+          <div key={m}>
+            <dt className="font-semibold text-fg">{SOLVERS[m].label}</dt>
+            <dd className="leading-relaxed">{SOLVERS[m].how}</dd>
+            <dd className="text-slate-500">{SOLVERS[m].runs} · {SOLVERS[m].result}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
+}
 
 function CompareStrip({ results, shown, comparing, canRunFast, onShow, onCompare }: {
   results: Partial<Record<SolveMode, SolveResult>>;
@@ -639,7 +690,7 @@ function CompareStrip({ results, shown, comparing, canRunFast, onShow, onCompare
   onShow: (mode: SolveMode) => void;
   onCompare: () => void;
 }) {
-  const other: SolveMode = shown === 'fast' ? 'optimal' : 'fast';
+  const other = compareTarget(shown, results);
 
   if (!results[other]) {
     return (
@@ -649,7 +700,7 @@ function CompareStrip({ results, shown, comparing, canRunFast, onShow, onCompare
           disabled={comparing || (other === 'fast' && !canRunFast)}
           className="px-3 py-1.5 font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded-md border border-fg/10 transition-colors"
         >
-          {comparing ? `Solving with ${MODE_LABEL[other]}…` : `Compare with ${MODE_LABEL[other]}`}
+          {comparing ? `Solving with ${SOLVERS[other].label}…` : `Compare with ${SOLVERS[other].label}`}
         </button>
         {other === 'optimal' && (
           <span className="text-slate-500">Optimal can take up to 50 s on deep scrambles.</span>
@@ -658,17 +709,19 @@ function CompareStrip({ results, shown, comparing, canRunFast, onShow, onCompare
     );
   }
 
-  const fast = results.fast;
+  const shownModes = (['fast', 'fast-cpp', 'optimal'] as SolveMode[]).filter((m) => results[m]);
+  const quick = shownModes.find((m) => m !== 'optimal');
+  const quickResult = quick && results[quick];
   const optimal = results.optimal;
   const saved =
-    fast && optimal && 'moves' in fast && 'moves' in optimal
-      ? fast.moves.length - optimal.moves.length
+    quick && quickResult && optimal && 'moves' in quickResult && 'moves' in optimal
+      ? quickResult.moves.length - optimal.moves.length
       : null;
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="grid grid-cols-2 gap-2">
-        {(['fast', 'optimal'] as SolveMode[]).map((m) => {
+      <div className={`grid gap-2 ${shownModes.length > 2 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        {shownModes.map((m) => {
           const r = results[m];
           if (!r) return null;
           return (
@@ -683,7 +736,7 @@ function CompareStrip({ results, shown, comparing, canRunFast, onShow, onCompare
                   : 'bg-slate-800/50 border-fg/10 text-slate-300 hover:bg-slate-800'
               }`}
             >
-              <span className="block font-semibold">{MODE_LABEL[m]}</span>
+              <span className="block font-semibold">{SOLVERS[m].label}</span>
               {'error' in r ? (
                 <span className="block text-red-600 dark:text-red-400">{r.error}</span>
               ) : (
@@ -698,8 +751,8 @@ function CompareStrip({ results, shown, comparing, canRunFast, onShow, onCompare
       {saved !== null && (
         <p className="text-xs text-slate-400">
           {saved > 0
-            ? `Optimal saves ${saved} move${saved === 1 ? '' : 's'} over the two-phase solution.`
-            : 'Two-phase already found an optimal solution for this cube.'}
+            ? `Optimal saves ${saved} move${saved === 1 ? '' : 's'} over ${SOLVERS[quick!].label}.`
+            : `${SOLVERS[quick!].label} already found an optimal solution for this cube.`}
         </p>
       )}
     </div>

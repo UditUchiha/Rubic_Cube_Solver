@@ -94,16 +94,18 @@ Moves enum: L/L'/L2, R/R'/R2, U/U'/U2, D/D'/D2, F/F'/F2, B/B'/B2 (indices 0-17)
 
 Next.js 14 frontend (`web/`) with Three.js 3D cube visualization + Express backend (`server/`) calling the C++ solver via `child_process`.
 
-### Two solvers, and when each is used
+### Solvers, and when each is used
 
-The UI defaults to **Fast** and only touches the backend in **Optimal**:
+The 3x3 page offers four (`SOLVERS` in `web/src/components/SolvePage.tsx` holds the on-page descriptions). It defaults to **Instant** and only touches the backend in **Fast** and **Optimal**:
 
-| | Fast (default) | Optimal |
-|---|---|---|
-| Algorithm | Kociemba two-phase (`cubejs`) | Korf IDA* (C++) |
-| Runs on | the user's browser, in a Web Worker | the Express/Render backend |
-| Solution | ~21-22 moves | provably fewest |
-| Time | 50-150ms at any depth | 5-8x more per extra move |
+| | Instant (default, `fast`) | Fast (`fast-cpp`) | Optimal | Beginner |
+|---|---|---|---|---|
+| Algorithm | Kociemba two-phase (`cubejs`) | Kociemba two-phase, own C++ (`TwoPhaseSolver.h`) | Korf IDA* (C++) | layer by layer, 7 stages (`beginnerSolver.ts`) |
+| Runs on | browser, Web Worker | backend, `mode: "fast"` | backend, `mode: "optimal"` | browser |
+| Solution | ~21-22 moves | ~22 moves | provably fewest | ~150 moves |
+| Time | 50-150ms at any depth | ~35ms + network | 5-8x more per extra move | instant |
+
+The 2x2 page (`/solve/2x2`) has one solver: the optimal in-browser one from `lib/puzzles.ts`.
 
 This split exists because IDA* cost is exponential in depth and no amount of hosting fixes that. On the deployed free tier (~0.1 CPU) a 12-move scramble took **21 seconds** and 13+ moves exceeded the 50s limit; the same cube solves in about 90ms in the browser.
 

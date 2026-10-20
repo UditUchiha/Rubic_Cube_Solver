@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 const STATS = [
-  { value: '<0.2s', label: 'Fast mode',     sub: 'Two-phase, in your browser' },
+  { value: '<0.2s', label: 'Instant mode',  sub: 'Two-phase, in your browser' },
   { value: 'IDA*',  label: 'Optimal mode',  sub: 'Provably fewest moves'      },
   { value: '20',    label: "God's Number",  sub: 'Most moves any cube needs'  },
 ];
@@ -89,7 +89,7 @@ export default function Home() {
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-widest"
             style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)', color: 'var(--accent-text)' }}>
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse inline-block" />
-            Fast &amp; optimal solvers
+            Instant, fast &amp; optimal solvers
           </span>
         </div>
 
@@ -179,7 +179,7 @@ export default function Home() {
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
       <footer className="relative border-t px-4 py-5 text-center text-xs text-slate-600" style={{ borderColor: 'var(--border)' }}>
-        Built with C++ IDA* · Kociemba two-phase · Three.js · Next.js
+        Built with C++ IDA* · Kociemba two-phase (JS and C++) · Beginner method · Three.js · Next.js
       </footer>
     </main>
     </>

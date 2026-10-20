@@ -406,7 +406,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
           <span className="text-slate-400"> centre ({FACE_NAMES[face]})</span>
         </p>
         {wrongFace !== null && !preview && (
-          <p className="text-xs text-amber-600 dark:text-amber-400" role="status">
+          <p className="text-xs text-amber-700 dark:text-amber-400" role="status">
             That looks like the {COLOR_NAMES[wrongFace]} face. Show the {COLOR_NAMES[face as Color]} centre.
           </p>
         )}

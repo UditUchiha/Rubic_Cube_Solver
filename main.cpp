@@ -4,6 +4,7 @@
 #include "Solver/BFSSolver.h"
 #include "Solver/IDDFSSolver.h"
 #include "Solver/IDAstarSolver.h"
+#include "Solver/TwoPhaseSolver.h"
 #include "PatternDatabases/CornerDBMaker.h"
 #include "PatternDatabases/EdgeDBMaker.h"
 
@@ -59,6 +60,12 @@ static int runBenchmark(const string &cornerFile, const string &edge1File, const
 }
 
 int main(int argc, char *argv[]) {
+    // "fast" as the first argument swaps Korf's optimal IDA* for two-phase:
+    // ~22 moves instead of the fewest, but any depth solves in milliseconds.
+    //   rubiks_cube_solver.exe fast 25
+    bool fast = argc >= 2 && string(argv[1]) == "fast";
+    if (fast) argc--, argv++;
+
     string cornerDBFile = "Databases\\corner.db";
     string edge1DBFile  = "Databases\\edge1.db";
     string edge2DBFile  = "Databases\\edge2.db";
@@ -111,6 +118,22 @@ int main(int argc, char *argv[]) {
     if (!isCubeSolvable(cube, why)) {
         cerr << "Internal error: shuffled cube is not solvable: " << why << endl;
         return 1;
+    }
+
+    if (fast) {
+        auto tableStart = chrono::steady_clock::now();
+        twophase::tables();
+        cout << "Two-phase tables built in " << fixed << setprecision(2)
+             << chrono::duration<double>(chrono::steady_clock::now() - tableStart).count() << "s" << endl;
+
+        auto start = chrono::steady_clock::now();
+        auto moves = TwoPhaseSolver<RubiksCubeBitboard>(cube).solve(timeLimitSeconds);
+        auto elapsed = chrono::duration<double>(chrono::steady_clock::now() - start).count();
+
+        cout << "Solution (" << moves.size() << " moves): ";
+        for (auto move: moves) cout << RubiksCube::getMove(move) << " ";
+        cout << "\nSolved in " << setprecision(1) << elapsed * 1000 << "ms (verified)" << endl;
+        return 0;
     }
 
     IDAstarSolver<RubiksCubeBitboard, HashBitboard> solver(

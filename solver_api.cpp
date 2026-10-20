@@ -3,6 +3,7 @@
 #include "PatternDatabases/CornerDBMaker.h"
 #include "PatternDatabases/EdgeDBMaker.h"
 #include "Solver/IDAstarSolver.h"
+#include "Solver/TwoPhaseSolver.h"
 
 using namespace std;
 
@@ -56,13 +57,18 @@ static RubiksCubeBitboard parseCube(const string &input) {
 
 static string solveCube(const string &input, CornerPatternDatabase &cornerDB,
                         EdgePatternDatabase &edge1DB, EdgePatternDatabase &edge2DB,
-                        double timeLimitSeconds) {
+                        double timeLimitSeconds, bool fast) {
     RubiksCubeBitboard cube = parseCube(input);
 
     if (cube.isSolved()) return "";
 
-    IDAstarSolver<RubiksCubeBitboard, HashBitboard> solver(cube, cornerDB, edge1DB, edge2DB);
-    vector<RubiksCube::MOVE> moves = solver.solve(timeLimitSeconds);
+    vector<RubiksCube::MOVE> moves;
+    if (fast) {
+        moves = TwoPhaseSolver<RubiksCubeBitboard>(cube).solve(timeLimitSeconds);
+    } else {
+        IDAstarSolver<RubiksCubeBitboard, HashBitboard> solver(cube, cornerDB, edge1DB, edge2DB);
+        moves = solver.solve(timeLimitSeconds);
+    }
 
     // Never hand back a solution we have not checked. A wrong move list is far
     // worse than an error: the user would turn a real cube into a worse mess.
@@ -131,12 +137,28 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    {
+        // ~8 MB of two-phase move/pruning tables, built once so FAST requests
+        // never pay for them.
+        cerr << "Building two-phase tables..." << endl;
+        auto start = chrono::steady_clock::now();
+        twophase::tables();
+        cerr << "Two-phase tables built in "
+             << chrono::duration<double>(chrono::steady_clock::now() - start).count() << "s" << endl;
+    }
+
     cerr << "Per-request time limit: " << timeLimitSeconds << "s" << endl;
     cerr << "READY" << endl;
 
     string line;
     while (getline(cin, line)) {
         if (line.empty()) continue;
+
+        // Optional solver prefix: "FAST <state>" = two-phase (~22 moves, any
+        // depth in ms), "OPTIMAL <state>" or a bare state = Korf IDA*.
+        bool fast = false;
+        if (line.compare(0, 5, "FAST ") == 0) fast = true, line.erase(0, 5);
+        else if (line.compare(0, 8, "OPTIMAL ") == 0) line.erase(0, 8);
 
         if (line.size() != 54) {
             cout << "ERROR: Input must be exactly 54 characters, got " << line.size() << endl;
@@ -168,7 +190,7 @@ int main(int argc, char *argv[]) {
         }
 
         try {
-            string result = solveCube(line, *cornerDB, *edge1DB, *edge2DB, timeLimitSeconds);
+            string result = solveCube(line, *cornerDB, *edge1DB, *edge2DB, timeLimitSeconds, fast);
             cout << "SOLUTION: " << result << endl;
             cout.flush();
         } catch (const SolverTimeout &) {

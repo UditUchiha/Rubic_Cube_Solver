@@ -22,7 +22,7 @@ export default function FaceColorGrid({ colors, onCycle }: Props) {
             'w-10 h-10 rounded border-2 transition-transform',
             i === 4
               ? 'border-slate-400 cursor-default'
-              : 'border-slate-600 hover:border-white hover:scale-110 cursor-pointer'
+              : 'border-slate-600 hover:border-fg hover:scale-110 cursor-pointer'
           )}
           style={{ backgroundColor: COLOR_HEX[color] }}
         />

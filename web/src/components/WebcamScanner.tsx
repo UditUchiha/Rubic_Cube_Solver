@@ -374,7 +374,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
         <div className="flex gap-2">
           <button
             onClick={() => { setCameraError(null); setAttempt((a) => a + 1); }}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-semibold"
+            className="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-semibold"
           >
             Try again
           </button>
@@ -398,15 +398,15 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
       {/* ── Which face, and crucially which way up ──────────────────────────── */}
       <div className="flex flex-col gap-2 text-center">
         <p className="text-sm">
-          <span className="font-semibold text-white">Face {faceIdx + 1} of 6</span>
+          <span className="font-semibold text-fg">Face {faceIdx + 1} of 6</span>
           <span className="text-slate-400"> — show the </span>
-          <span className="font-semibold" style={{ color: COLOR_HEX[face as Color] }}>
+          <span className="font-semibold swatch-label" style={{ color: COLOR_HEX[face as Color] }}>
             {COLOR_NAMES[face as Color]}
           </span>
           <span className="text-slate-400"> centre ({FACE_NAMES[face]})</span>
         </p>
         {wrongFace !== null && !preview && (
-          <p className="text-xs text-amber-400" role="status">
+          <p className="text-xs text-amber-600 dark:text-amber-400" role="status">
             That looks like the {COLOR_NAMES[wrongFace]} face. Show the {COLOR_NAMES[face as Color]} centre.
           </p>
         )}
@@ -416,7 +416,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
               <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
             </svg>
             top edge:
-            <span className="font-semibold" style={{ color: COLOR_HEX[orientation.top] }}>
+            <span className="font-semibold swatch-label" style={{ color: COLOR_HEX[orientation.top] }}>
               {COLOR_NAMES[orientation.top]}
             </span>
           </span>
@@ -425,7 +425,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
               <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
             </svg>
             left edge:
-            <span className="font-semibold" style={{ color: COLOR_HEX[orientation.left] }}>
+            <span className="font-semibold swatch-label" style={{ color: COLOR_HEX[orientation.left] }}>
               {COLOR_NAMES[orientation.left]}
             </span>
           </span>
@@ -443,17 +443,17 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
       )}
 
       {failed && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-300 flex flex-col gap-1">
-          <span className="font-semibold text-red-400">That scan is not a solvable cube</span>
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-700 dark:text-red-300 flex flex-col gap-1">
+          <span className="font-semibold text-red-600 dark:text-red-400">That scan is not a solvable cube</span>
           {failed.errors.map((e, i) => <span key={i}>• {e}</span>)}
           <div className="mt-1 flex gap-4">
             <button
               onClick={() => onComplete(failed.state, [])}
-              className="text-xs underline text-red-400 hover:text-red-200"
+              className="text-xs underline text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
             >
               Fix colours in the editor
             </button>
-            <button onClick={restart} className="text-xs underline text-red-400 hover:text-red-200">
+            <button onClick={restart} className="text-xs underline text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200">
               Re-scan all faces
             </button>
           </div>
@@ -465,7 +465,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
           <>
             <button
               onClick={handleCapture}
-              className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold"
+              className="flex-1 py-2.5 text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold"
             >
               Capture Face
             </button>
@@ -483,7 +483,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
             </button>
             <button
               onClick={handleUseFace}
-              className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold"
+              className="flex-1 py-2.5 text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold"
             >
               {isLastFace ? 'Finish' : 'Use This Face →'}
             </button>

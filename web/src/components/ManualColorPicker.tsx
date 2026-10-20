@@ -10,6 +10,9 @@ import clsx from 'clsx';
 interface Props {
   state: CubeState;
   onChange: (state: CubeState) => void;
+  /** Lifted to the parent so the 3D preview paints with the same colour. */
+  activeColor: Color;
+  onActiveColorChange: (color: Color) => void;
 }
 
 const PALETTE: Color[] = [0, 1, 2, 3, 4, 5];
@@ -28,8 +31,7 @@ const FACE_POSITIONS: [Face, number, number][] = [
 const MIN_CELL = 24;
 const MAX_CELL = 40;
 
-export default function ManualColorPicker({ state, onChange }: Props) {
-  const [activeColor, setActiveColor] = useState<Color>(2); // default Red
+export default function ManualColorPicker({ state, onChange, activeColor, onActiveColorChange }: Props) {
   const [cellSize, setCellSize] = useState(36);
   const containerRef = useRef<HTMLDivElement>(null);
   const n = cubeSize(state);
@@ -77,14 +79,14 @@ export default function ManualColorPicker({ state, onChange }: Props) {
           <button
             key={color}
             id={`color-swatch-${color}`}
-            onClick={() => setActiveColor(color)}
+            onClick={() => onActiveColorChange(color)}
             aria-label={`Select ${COLOR_NAMES[color]}`}
             aria-pressed={activeColor === color}
             className={clsx(
               'rounded-full border-2 transition-all duration-200 flex-shrink-0',
               activeColor === color
-                ? 'scale-125 border-white shadow-lg'
-                : 'border-gray-600 hover:border-gray-300 hover:scale-110'
+                ? 'scale-125 border-fg shadow-lg'
+                : 'border-slate-600 hover:border-slate-300 hover:scale-110'
             )}
             style={{
               width: 28, height: 28,
@@ -107,7 +109,7 @@ export default function ManualColorPicker({ state, onChange }: Props) {
           id="reset-cube-btn"
           onClick={handleReset}
           className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-            text-slate-400 border border-slate-700 hover:border-slate-500 hover:text-white
+            text-slate-400 border border-slate-700 hover:border-slate-500 hover:text-fg
             transition-all duration-200 active:scale-95"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>

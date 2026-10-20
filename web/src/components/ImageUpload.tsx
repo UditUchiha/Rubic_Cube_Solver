@@ -98,7 +98,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 /* Opens the rear camera on phones. Hidden where a mouse is used: desktop ignores `capture` and shows a file picker. */
 function TakePhoto({ onChange, className }: { onChange: React.ChangeEventHandler<HTMLInputElement>; className: string }) {
   return (
-    <label className={clsx(className, 'text-center bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-semibold cursor-pointer transition-colors [@media(pointer:fine)]:hidden')}>
+    <label className={clsx(className, 'text-center text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-semibold cursor-pointer transition-colors [@media(pointer:fine)]:hidden')}>
       Take photo
       <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onChange} />
     </label>
@@ -272,7 +272,7 @@ export default function ImageUpload({ onComplete }: Props) {
               activeFace === i
                 ? 'bg-indigo-600 border-indigo-400 text-white'
                 : faces[i]
-                ? 'bg-green-900/40 border-green-700 text-green-300'
+                ? 'bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
                 : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-400'
             )}
           >
@@ -285,18 +285,18 @@ export default function ImageUpload({ onComplete }: Props) {
       <div className="flex flex-col gap-1">
         <p className="text-sm text-slate-300">
           {FACE_NAMES[activeFace]} —{' '}
-          <span className="font-semibold" style={{ color: COLOR_HEX[activeFace as Color] }}>
+          <span className="font-semibold swatch-label" style={{ color: COLOR_HEX[activeFace as Color] }}>
             {COLOR_NAMES[activeFace as Color]}
           </span>{' '}
           centre
         </p>
         <p className="text-xs text-slate-500">
           Top edge must be{' '}
-          <span className="font-semibold" style={{ color: COLOR_HEX[orientation.top] }}>
+          <span className="font-semibold swatch-label" style={{ color: COLOR_HEX[orientation.top] }}>
             {COLOR_NAMES[orientation.top]}
           </span>
           , left edge{' '}
-          <span className="font-semibold" style={{ color: COLOR_HEX[orientation.left] }}>
+          <span className="font-semibold swatch-label" style={{ color: COLOR_HEX[orientation.left] }}>
             {COLOR_NAMES[orientation.left]}
           </span>
           .
@@ -389,7 +389,9 @@ export default function ImageUpload({ onComplete }: Props) {
       ) : (
         <div className="flex flex-col gap-2">
           <label className="flex flex-col items-center justify-center gap-1 h-32 px-4 text-center bg-slate-800/50 border-2 border-dashed border-slate-600 hover:border-slate-400 rounded-xl cursor-pointer transition-colors">
-            <span className="text-2xl">📷</span>
+            <svg className="mb-1 text-slate-400" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
             <span className="text-sm text-slate-300">Choose photos</span>
             <span className="text-xs text-slate-500">Pick all six at once and they are matched to faces by centre colour</span>
             <input type="file" accept="image/*" multiple className="hidden" onChange={handleFileChange} />
@@ -399,7 +401,7 @@ export default function ImageUpload({ onComplete }: Props) {
       )}
 
       {fileError && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-300">{fileError}</div>
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-700 dark:text-red-300">{fileError}</div>
       )}
       {matchNote && <p className="text-xs text-indigo-300" role="status">{matchNote}</p>}
 
@@ -411,12 +413,12 @@ export default function ImageUpload({ onComplete }: Props) {
       )}
 
       {failed && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-300 flex flex-col gap-1">
-          <span className="font-semibold text-red-400">These photos are not a solvable cube</span>
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-700 dark:text-red-300 flex flex-col gap-1">
+          <span className="font-semibold text-red-600 dark:text-red-400">These photos are not a solvable cube</span>
           {failed.errors.map((e, i) => <span key={i}>• {e}</span>)}
           <button
             onClick={() => onComplete(failed.state, [])}
-            className="mt-1 text-xs underline text-red-400 hover:text-red-200 self-start"
+            className="mt-1 text-xs underline text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 self-start"
           >
             Fix colours in the editor
           </button>
@@ -426,7 +428,7 @@ export default function ImageUpload({ onComplete }: Props) {
       <button
         onClick={handleFinish}
         disabled={!allUploaded}
-        className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-semibold text-sm transition-colors"
+        className="w-full py-3 text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-semibold text-sm transition-colors"
       >
         {allUploaded ? 'Use These Colours' : `Upload all 6 faces (${faces.filter(Boolean).length}/6 done)`}
       </button>

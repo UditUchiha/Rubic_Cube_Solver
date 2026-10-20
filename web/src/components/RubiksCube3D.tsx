@@ -20,7 +20,12 @@ interface Props {
   move?: string | null;
   animDuration?: number;
   onMoveComplete?: () => void;
+  /** Called with the 0-53 state index of a clicked sticker. Drags don't count. */
+  onStickerClick?: (index: number) => void;
 }
+
+// Pointer travel in px under which a press counts as a click, not a drag to orbit.
+const CLICK_SLOP = 5;
 
 // Internal colour index -> hex. Index order is U, L, F, R, B, D.
 const FACE_COLORS = [
@@ -160,16 +165,23 @@ const STICKER_FACES: {
 ];
 
 function Cubie({
-  x, y, z, n, state, res,
+  x, y, z, n, state, res, onStickerClick,
 }: {
   x: number; y: number; z: number; n: number; state: CubeState; res: Resources;
+  onStickerClick?: (index: number) => void;
 }) {
   const pos = { x, y, z };
   const h = (n - 1) / 2;
 
   return (
     <group position={[x * CUBIE_SPACING, y * CUBIE_SPACING, z * CUBIE_SPACING]}>
-      <mesh geometry={res.cubieGeometry} material={res.cubieMaterial} />
+      <mesh
+        geometry={res.cubieGeometry}
+        material={res.cubieMaterial}
+        // The plastic swallows clicks too, or a click in the gap between
+        // stickers would carry on through the cube and paint the far side.
+        onClick={onStickerClick && ((e) => e.stopPropagation())}
+      />
       {STICKER_FACES.map((sf) =>
         sf.visible(pos, h) ? (
           <mesh
@@ -178,6 +190,10 @@ function Cubie({
             material={res.stickerMaterials[state[sf.face * n * n + sf.cell(pos, h, n)]]}
             position={sf.position}
             rotation={sf.rotation}
+            onClick={onStickerClick && ((e) => {
+              e.stopPropagation(); // only the front-most sticker under the pointer
+              if (e.delta <= CLICK_SLOP) onStickerClick(sf.face * n * n + sf.cell(pos, h, n));
+            })}
           />
         ) : null
       )}
@@ -224,7 +240,7 @@ function cubiePositions(n: number): Pos[] {
 }
 
 function CubeContent({
-  state, move, animDuration, onMoveComplete, autoRotate, autoRotateSpeed,
+  state, move, animDuration, onMoveComplete, autoRotate, autoRotateSpeed, onStickerClick,
 }: {
   state: CubeState;
   move: string | null;
@@ -232,6 +248,7 @@ function CubeContent({
   onMoveComplete: () => void;
   autoRotate: boolean;
   autoRotateSpeed: number;
+  onStickerClick?: (index: number) => void;
 }) {
   const spinRef = useRef<THREE.Group>(null);
   const layerRef = useRef<THREE.Group>(null);
@@ -278,7 +295,7 @@ function CubeContent({
   const still = positions.filter((p) => !inLayer(p));
 
   const render = (p: Pos) => (
-    <Cubie key={`${p.x},${p.y},${p.z}`} x={p.x} y={p.y} z={p.z} n={n} state={state} res={res} />
+    <Cubie key={`${p.x},${p.y},${p.z}`} x={p.x} y={p.y} z={p.z} n={n} state={state} res={res} onStickerClick={onStickerClick} />
   );
 
   return (
@@ -301,6 +318,7 @@ export default function RubiksCube3D({
   move = null,
   animDuration = 400,
   onMoveComplete = () => {},
+  onStickerClick,
 }: Props) {
   const wrapperStyle: React.CSSProperties = fill
     ? { width: '100%', height: '100%' }
@@ -308,7 +326,7 @@ export default function RubiksCube3D({
 
   return (
     <div
-      style={{ ...wrapperStyle, cursor: interactive ? 'grab' : 'default', touchAction: 'pan-y' }}
+      style={{ ...wrapperStyle, cursor: onStickerClick ? 'pointer' : interactive ? 'grab' : 'default', touchAction: 'pan-y' }}
       role="img"
       aria-label="3D Rubik's Cube"
     >
@@ -332,6 +350,7 @@ export default function RubiksCube3D({
           onMoveComplete={onMoveComplete}
           autoRotate={autoRotate}
           autoRotateSpeed={autoRotateSpeed}
+          onStickerClick={onStickerClick}
         />
 
         {interactive && (

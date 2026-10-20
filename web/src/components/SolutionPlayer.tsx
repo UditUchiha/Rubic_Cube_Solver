@@ -3,6 +3,7 @@
 import { CubeState, computeCubeStates } from '@/lib/cubeState';
 import { Fragment, useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import clsx from 'clsx';
+import SegmentedControl from './SegmentedControl';
 import RubiksCube3D from './RubiksCube3D';
 
 interface Props {
@@ -151,16 +152,16 @@ export default function SolutionPlayer({ initialState, moves, stages }: Props) {
         {stages && stageIndex >= 0 && (
           <p className="text-sm text-slate-300">
             Stage {stageIndex + 1} of {stages.length}:{' '}
-            <span className="font-semibold text-white">{stages[stageIndex].name}</span>
+            <span className="font-semibold text-fg">{stages[stageIndex].name}</span>
           </p>
         )}
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-400" aria-live="polite">
-            Step <span className="text-white font-semibold">{step}</span> of <span className="text-white font-semibold">{moves.length}</span>
+            Step <span className="text-fg font-semibold">{step}</span> of <span className="text-fg font-semibold">{moves.length}</span>
             {step > 0 && <span className="sr-only">, last move {moves[step - 1]}</span>}
           </span>
           {isSolved && (
-            <span className="text-green-400 font-semibold flex items-center gap-1.5 animate-scale-in">
+            <span className="text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5 animate-scale-in">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden>
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -169,7 +170,7 @@ export default function SolutionPlayer({ initialState, moves, stages }: Props) {
           )}
         </div>
 
-        <div className="h-2 bg-slate-800/50 rounded-full overflow-hidden border border-white/5 relative">
+        <div className="h-2 bg-slate-800/50 rounded-full overflow-hidden border border-fg/10 relative">
           <div
             className="absolute top-0 bottom-0 left-0 transition-all duration-300 ease-out"
             style={{ 
@@ -208,7 +209,7 @@ export default function SolutionPlayer({ initialState, moves, stages }: Props) {
           className={clsx(
             'px-6 py-2.5 rounded-xl font-bold transition-all duration-200 flex items-center gap-2 min-w-[100px] justify-center',
             playing 
-              ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30' 
+              ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500/30' 
               : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.4)]',
             step === moves.length && 'opacity-50 cursor-not-allowed shadow-none hover:bg-indigo-600'
           )}
@@ -240,21 +241,13 @@ export default function SolutionPlayer({ initialState, moves, stages }: Props) {
       </div>
 
       {/* ── Speed ─────────────────────────────────────────────────────────── */}
-      <div className="flex justify-center bg-slate-900/50 p-1 rounded-lg w-fit mx-auto border border-white/5">
-        {SPEEDS.map(({ label, ms }) => (
-          <button
-            key={label}
-            onClick={() => setSpeed(ms)}
-            className={clsx(
-              'px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all',
-              speed === ms
-                ? 'bg-slate-700 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            )}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex justify-center">
+        <SegmentedControl
+          label="Playback speed"
+          value={speed}
+          onChange={setSpeed}
+          options={SPEEDS.map(({ label, ms }) => ({ value: ms, label }))}
+        />
       </div>
 
       {/* ── Move Badges ───────────────────────────────────────────────────── */}
@@ -273,7 +266,7 @@ export default function SolutionPlayer({ initialState, moves, stages }: Props) {
             className={clsx(
               'px-2.5 py-1.5 rounded-lg text-sm font-mono font-bold transition-all border',
               i < step
-                ? 'bg-emerald-900/20 border-emerald-500/30 text-emerald-400 hover:bg-emerald-900/40' // Past moves
+                ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40' // Past moves
                 : i === step
                 ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-500/25 scale-[1.08] z-10' // Current move
                 : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:bg-slate-800 hover:text-slate-200' // Future moves

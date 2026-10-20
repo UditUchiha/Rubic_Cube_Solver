@@ -6,13 +6,53 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 /* ── Design tokens ───────────────────────────────────────────────────────── */
+/* Light is the base; `.dark` on <html> (set by the script in layout.tsx)
+   overrides it. Colours used with Tailwind opacity modifiers are bare RGB
+   channels: `rgb(var(--fg) / 0.5)`. */
 :root {
+  color-scheme:  light;
+  --bg:          #f4f6fb;
+  --surface:     rgba(255,255,255,0.72);
+  --border:      rgba(15,23,42,0.1);
+  --fg:          15 23 42;
+  --grid-line:   rgba(15,23,42,0.6);
+  --heading-from:#0f172a;
+  --heading-to:  #475569;
+  --accent-text: #4f46e5;
+  --stat-from:   #4f46e5;
+  --skeleton-base: rgba(15,23,42,0.05);
+  --skeleton-shine: rgba(15,23,42,0.1);
+  --indigo:      #6366f1;
+  --indigo-glow: rgba(99,102,241,0.35);
+  --green-glow:  rgba(34,197,94,0.3);
+
+  /* Tailwind's slate scale, reversed: slate-800 is a light panel here. */
+  --slate-50:  2 6 23;      --slate-100: 15 23 42;   --slate-200: 30 41 59;
+  --slate-300: 51 65 85;    --slate-400: 71 85 105;  --slate-500: 100 116 139;
+  --slate-600: 148 163 184; --slate-700: 203 213 225; --slate-800: 226 232 240;
+  --slate-900: 241 245 249; --slate-950: 248 250 252;
+}
+
+.dark {
+  color-scheme:  dark;
   --bg:          #05070f;
   --surface:     rgba(255,255,255,0.045);
   --border:      rgba(255,255,255,0.09);
-  --indigo:      #6366f1;
+  --fg:          241 245 249;
+  --grid-line:   rgba(255,255,255,0.5);
+  --heading-from:#ffffff;
+  --heading-to:  #94a3b8;
+  --accent-text: #a5b4fc;
+  --stat-from:   #a5b4fc;
+  --skeleton-base: rgba(255,255,255,0.04);
+  --skeleton-shine: rgba(255,255,255,0.09);
   --indigo-glow: rgba(99,102,241,0.45);
   --green-glow:  rgba(34,197,94,0.4);
+
+  --slate-50:  248 250 252; --slate-100: 241 245 249; --slate-200: 226 232 240;
+  --slate-300: 203 213 225; --slate-400: 148 163 184; --slate-500: 100 116 139;
+  --slate-600: 71 85 105;   --slate-700: 51 65 85;    --slate-800: 30 41 59;
+  --slate-900: 15 23 42;    --slate-950: 2 6 23;
 }
 
 /* ── Base ────────────────────────────────────────────────────────────────── */
@@ -21,28 +61,15 @@
 html { scroll-behavior: smooth; }
 
 body {
-  color: #f1f5f9;
+  color: rgb(var(--fg));
   background: var(--bg);
+  transition: background-color 0.3s ease, color 0.3s ease;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
 
 /* ── Keyframes ───────────────────────────────────────────────────────────── */
-@keyframes aurora-1 {
-  0%, 100% { transform: translate(0%, 0%)   scale(1);   }
-  33%       { transform: translate(8%, -6%)  scale(1.08); }
-  66%       { transform: translate(-5%, 5%)  scale(0.95); }
-}
-@keyframes aurora-2 {
-  0%, 100% { transform: translate(0%, 0%)   scale(1);   }
-  40%       { transform: translate(-10%, 4%) scale(1.12); }
-  70%       { transform: translate(6%, -8%)  scale(0.97); }
-}
-@keyframes aurora-3 {
-  0%, 100% { transform: translate(0%, 0%)   scale(1);   }
-  50%       { transform: translate(5%, 8%)   scale(1.05); }
-}
 
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(24px); }
@@ -92,13 +119,13 @@ body {
 
   /* Gradient text */
   .gradient-text {
-    background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+    background: linear-gradient(135deg, var(--heading-from) 0%, var(--heading-to) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
   .gradient-text-indigo {
-    background: linear-gradient(135deg, #a5b4fc 0%, #818cf8 50%, #6366f1 100%);
+    background: linear-gradient(135deg, var(--stat-from) 0%, #818cf8 50%, #6366f1 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -142,52 +169,40 @@ body {
     pointer-events: none;
   }
 
-  /* Aurora background blobs */
-  .aurora {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    pointer-events: none;
-  }
-  .aurora-blob {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.35;
-  }
-  .aurora-blob-1 {
-    width: 55vw; height: 55vw;
-    max-width: 700px; max-height: 700px;
-    background: radial-gradient(circle, #4f46e5 0%, transparent 70%);
-    top: -15%; left: -10%;
-    animation: aurora-1 14s ease-in-out infinite;
-  }
-  .aurora-blob-2 {
-    width: 45vw; height: 45vw;
-    max-width: 560px; max-height: 560px;
-    background: radial-gradient(circle, #7c3aed 0%, transparent 70%);
-    top: 20%; right: -5%;
-    animation: aurora-2 18s ease-in-out infinite;
-  }
-  .aurora-blob-3 {
-    width: 40vw; height: 40vw;
-    max-width: 500px; max-height: 500px;
-    background: radial-gradient(circle, #0ea5e9 0%, transparent 70%);
-    bottom: -10%; left: 30%;
-    animation: aurora-3 22s ease-in-out infinite;
-  }
-
   /* Skeleton shimmer for loading */
   .skeleton {
     background: linear-gradient(90deg,
-      rgba(255,255,255,0.04) 25%,
-      rgba(255,255,255,0.09) 50%,
-      rgba(255,255,255,0.04) 75%
+      var(--skeleton-base) 25%,
+      var(--skeleton-shine) 50%,
+      var(--skeleton-base) 75%
     );
     background-size: 200% 100%;
     animation: shimmer 1.8s linear infinite;
   }
 
+  /* Colour name with a swatch: `color` (inline) paints the swatch, the text
+     stays foreground - yellow or white text is unreadable on a light page. */
+  .swatch-label { -webkit-text-fill-color: rgb(var(--fg)); }
+  .swatch-label::before {
+    content: '';
+    display: inline-block;
+    width: 0.65em; height: 0.65em;
+    margin-right: 0.3em;
+    border-radius: 2px;
+    background: currentColor;
+    box-shadow: 0 0 0 1px rgb(var(--fg) / 0.25);
+  }
+
   /* text-balance polyfill utility */
   .text-balance { text-wrap: balance; }
+}
+
+/* Respect the OS "reduce motion" setting for every CSS animation and transition. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

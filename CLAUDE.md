@@ -132,3 +132,12 @@ Each face has a fixed orientation inside the 54-char state. The scanners show th
 Uploaded photos are downscaled to 1600 px on the long side before sampling: iOS Safari caps a canvas at ~16.7 MP and draws larger photos blank. Several photos picked at once are matched to faces by centre colour over all of them together (`matchPhotosToFaces`).
 
 Self-check for the scan logic: `cd web && npx --yes tsx scripts/scan-selfcheck.ts`.
+
+### Theming (ui-threejs branch)
+
+Light/dark via a `dark` class on `<html>`, set before first paint by the inline script in `web/src/app/layout.tsx` (saved choice in `localStorage.theme`, else the OS setting) and flipped by `ThemeToggle`. Tokens live in `web/src/app/globals.css`.
+- `slate-*` is remapped to CSS variables and **reversed in light mode** (`bg-slate-800` is a light panel there), so write neutral classes for the dark look and they adapt. Use `fg` (`text-fg`, `border-fg/10`) for "foreground"; keep `text-white` only on indigo fills, video and photo overlays.
+- Pale accent text needs a light pair: `text-red-600 dark:text-red-400`.
+- The cube net and 3D cube keep their black body in both themes, as a real cube does.
+
+3D extras on this branch: `HeroCube` loops a scramble and its inverse (no solver needed); `CubeField` is the home-page background (one `InstancedMesh`, kept out of the centre column); the solve page's right panel is a live, paintable `RubiksCube3D` (`onStickerClick`). All honour `prefers-reduced-motion` via `useReducedMotion`.

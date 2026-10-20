@@ -1,0 +1,2 @@
+# Pattern databases are raw nibble arrays; without this, autocrlf rewrites 0x0A bytes on Windows checkout.
+*.db binary

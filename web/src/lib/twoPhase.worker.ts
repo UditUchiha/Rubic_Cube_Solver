@@ -15,16 +15,9 @@
  */
 
 import Cube from 'cubejs';
+import type { WorkerRequest, WorkerResponse } from './browserSolver';
 
-export type WorkerRequest =
-  | { type: 'init' }
-  | { type: 'solve'; id: number; facelets: string; maxDepth?: number };
-
-export type WorkerResponse =
-  | { type: 'ready'; initMs: number }
-  | { type: 'init-error'; error: string }
-  | { type: 'solved'; id: number; moves: string[]; solveMs: number }
-  | { type: 'solve-error'; id: number; error: string };
+const MAX_DEPTH = 22;
 
 let ready = false;
 
@@ -60,14 +53,14 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
       ensureReady();
 
       const started = performance.now();
-      const solution = Cube.fromString(message.facelets).solve(message.maxDepth ?? 22);
+      const solution = Cube.fromString(message.input as string).solve(MAX_DEPTH);
       const solveMs = performance.now() - started;
 
       if (solution === null || solution === undefined) {
         const payload: WorkerResponse = {
           type: 'solve-error',
           id: message.id,
-          error: `No solution found within ${message.maxDepth ?? 22} moves`,
+          error: `No solution found within ${MAX_DEPTH} moves`,
         };
         self.postMessage(payload);
         return;

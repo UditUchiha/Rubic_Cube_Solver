@@ -14,10 +14,6 @@ export const FACE_NAMES = ['Up', 'Left', 'Front', 'Right', 'Back', 'Down'] as co
 // Center cell index for each face (row=1, col=1 → offset 4)
 export const FACE_CENTERS: Color[] = [0, 1, 2, 3, 4, 5]; // W G R B O Y
 
-export function idx(face: Face, row: number, col: number): number {
-  return face * 9 + row * 3 + col;
-}
-
 export function createSolvedState(): CubeState {
   const state: Color[] = new Array(54);
   for (let face = 0; face < 6; face++) {
@@ -51,7 +47,7 @@ export interface ValidationResult {
 // ─── Parity helpers ────────────────────────────────────────────────────────
 // Corner sticker positions: [U/D_sticker, second, third]
 // Ported from RubiksCube.cpp::getCornerColorString()
-const CORNERS: [number, number, number][] = [
+export const CORNERS: [number, number, number][] = [
   [8, 20, 27],  // UFR: U[2][2], F[0][2], R[0][0]
   [6, 18, 11],  // UFL: U[2][0], F[0][0], L[0][2]
   [0, 38,  9],  // UBL: U[0][0], B[0][2], L[0][0]
@@ -79,7 +75,7 @@ const EDGES: [number, number][] = [
   [41, 12], // BL: B[1][2], L[1][0]
 ];
 
-const CORNER_NAMES = ['UFR', 'UFL', 'UBL', 'UBR', 'DFR', 'DFL', 'DBR', 'DBL'] as const;
+export const CORNER_NAMES = ['UFR', 'UFL', 'UBL', 'UBR', 'DFR', 'DFL', 'DBR', 'DBL'] as const;
 const EDGE_NAMES = ['UF', 'UR', 'UB', 'UL', 'DF', 'DR', 'DB', 'DL', 'FR', 'FL', 'BR', 'BL'] as const;
 
 /*
@@ -90,7 +86,7 @@ const EDGE_NAMES = ['UF', 'UR', 'UB', 'UL', 'DF', 'DR', 'DB', 'DL', 'FR', 'FL', 
  * summed raw, the total spreads evenly over 0/1/2 and carries no information.
  * Mirrors CORNER_CHIRALITY in Model/CubeValidation.h.
  */
-const CORNER_CHIRALITY = [+1, -1, +1, -1, -1, +1, +1, -1];
+export const CORNER_CHIRALITY = [+1, -1, +1, -1, -1, +1, +1, -1];
 
 function getCornerPieceId(state: CubeState, ci: number): number {
   const colors = CORNERS[ci].map((p) => state[p]);
@@ -252,22 +248,6 @@ export function validate(state: CubeState): ValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
-export function getFaceColors(state: CubeState, face: Face): Color[] {
-  return state.slice(face * 9, face * 9 + 9);
-}
-
-export function setCell(
-  state: CubeState,
-  face: Face,
-  row: number,
-  col: number,
-  color: Color
-): CubeState {
-  const next = [...state] as CubeState;
-  next[idx(face, row, col)] = color;
-  return next;
-}
-
 // Rotate a face clockwise (ported from RubiksCube3dArray::rotateFace)
 function rotateFace(state: Color[], faceIdx: number): void {
   const base = faceIdx * 9;
@@ -392,16 +372,6 @@ function applyMove3(s: Color[], move: string): void {
   tmp = applyMove(tmp, base);
   tmp = applyMove(tmp, base);
   for (let i = 0; i < 54; i++) s[i] = tmp[i];
-}
-
-export function computeCubeStates(initial: CubeState, moves: string[]): CubeState[] {
-  const states: CubeState[] = [initial];
-  let current = initial;
-  for (const move of moves) {
-    current = applyMove(current, move);
-    states.push(current);
-  }
-  return states;
 }
 
 export function isSolved(state: CubeState): boolean {

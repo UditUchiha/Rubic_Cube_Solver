@@ -1,6 +1,6 @@
 'use client';
 
-import { CubeState, computeCubeStates } from '@/lib/cubeState';
+import type { CubeState } from '@/lib/cubeState';
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import clsx from 'clsx';
 import RubiksCube3D from './RubiksCube3D';
@@ -8,6 +8,8 @@ import RubiksCube3D from './RubiksCube3D';
 interface Props {
   initialState: CubeState;
   moves: string[];
+  applyMove: (state: CubeState, move: string) => CubeState;
+  layers: number;
 }
 
 const SPEEDS = [
@@ -16,7 +18,7 @@ const SPEEDS = [
   { label: 'Fast',   ms: 180 },
 ];
 
-export default function SolutionPlayer({ initialState, moves }: Props) {
+export default function SolutionPlayer({ initialState, moves, applyMove, layers }: Props) {
   const [step, setStep] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [animatingMove, setAnimatingMove] = useState<string | null>(null);
@@ -24,12 +26,12 @@ export default function SolutionPlayer({ initialState, moves }: Props) {
   const [cubeSize, setCubeSize] = useState(160);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Memoised: this walks the whole solution and copies 54 cells per move, and
+  // Memoised: this walks the whole solution and copies the cells per move, and
   // it used to re-run on every render - including the ones the animation frame
   // loop triggers for each move.
   const cubeStates = useMemo(
-    () => computeCubeStates(initialState, moves),
-    [initialState, moves]
+    () => moves.reduce((states, m) => [...states, applyMove(states[states.length - 1], m)], [initialState]),
+    [initialState, moves, applyMove]
   );
 
   // Compute responsive cube size
@@ -86,6 +88,7 @@ export default function SolutionPlayer({ initialState, moves }: Props) {
         )}
         <RubiksCube3D
           state={currentState}
+          layers={layers}
           size={cubeSize}
           move={animatingMove}
           animDuration={speed}

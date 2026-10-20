@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Branches:** `cpp`, `js` and `ui-threejs` are separate deployable variants, stacked in that order. Read [BRANCHES.md](BRANCHES.md) before committing. Fixes go on the lowest branch they apply to and are merged upward, never down.
+
 ## Build Commands
 
 ```bash

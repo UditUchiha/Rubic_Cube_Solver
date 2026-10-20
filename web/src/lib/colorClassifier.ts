@@ -220,15 +220,3 @@ export function sampleRegionRGB(
   if (kept === 0) return [Math.round(mr), Math.round(mg), Math.round(mb)];
   return [Math.round(sumR / kept), Math.round(sumG / kept), Math.round(sumB / kept)];
 }
-
-/* Backwards-compatible single-sticker sampler. */
-export function sampleRegion(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number
-): Color {
-  const [r, g, b] = sampleRegionRGB(ctx, x, y, w, h);
-  return classifyColor(r, g, b);
-}

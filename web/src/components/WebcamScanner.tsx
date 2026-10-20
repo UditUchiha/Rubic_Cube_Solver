@@ -1,33 +1,16 @@
 'use client';
 
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { CubeState, Color, COLOR_HEX, COLOR_NAMES, FACE_NAMES, validate } from '@/lib/cubeState';
-import { sampleRegionRGB, assignFaceColors, assignCubeColors, buildReferences, RGB } from '@/lib/colorClassifier';
+import { CubeState, Color, COLOR_HEX, COLOR_NAMES, FACE_NAMES } from '@/lib/cubeState';
+import { sampleRegionRGB, assignFaceColors, buildReferences, RGB } from '@/lib/colorClassifier';
+import { FACE_ORIENTATION, Overrides, ScanResult, dropFace, finishScan } from '@/lib/scan';
+import FaceColorGrid from './FaceColorGrid';
 import clsx from 'clsx';
 
 interface Props {
-  onComplete: (state: CubeState) => void;
+  onComplete: (state: CubeState, notes: string[]) => void;
   onCancel: () => void;
 }
-
-/*
- * The 54-character state is not just six faces of colours — each face has a
- * fixed orientation inside it. Scanning a face rotated by 90 degrees produces a
- * cube that is correctly coloured and completely unsolvable, which used to be
- * the single most common way for a scan to fail: nothing on screen ever said
- * which way up to hold the cube.
- *
- * Derived from the sticker adjacencies in cubeState.ts: for each face, which
- * neighbouring face must sit along the top edge and the left edge of the view.
- */
-const FACE_ORIENTATION: { top: Color; left: Color }[] = [
-  { top: 4, left: 1 }, // U (white):  orange up,  green left
-  { top: 0, left: 4 }, // L (green):  white up,   orange left
-  { top: 0, left: 1 }, // F (red):    white up,   green left
-  { top: 0, left: 2 }, // R (blue):   white up,   red left
-  { top: 0, left: 3 }, // B (orange): white up,   blue left
-  { top: 2, left: 1 }, // D (yellow): red up,     green left
-];
 
 const GRID_FRACTION = 0.62;
 
@@ -81,8 +64,8 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
   const [scanned, setScanned] = useState<({ colors: Color[]; samples: RGB[] } | null)[]>(
     Array(6).fill(null)
   );
-  const [overrides, setOverrides] = useState<Record<number, Color>>({});
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [overrides, setOverrides] = useState<Overrides>({});
+  const [failed, setFailed] = useState<ScanResult | null>(null);
 
   const face = faceIdx;
   const orientation = FACE_ORIENTATION[face];
@@ -239,6 +222,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
     centres[face] = samples[4];
 
     const colors = assignFaceColors(samples, face, buildReferences(centres));
+    setOverrides((o) => dropFace(o, face));
     setPreview({ colors, samples });
   }
 
@@ -255,26 +239,15 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
     const next = [...scanned];
     next[faceIdx] = preview;
     setScanned(next);
+    setPreview(null);
 
-    if (faceIdx < 5) {
-      setFaceIdx(faceIdx + 1);
-      setPreview(null);
-      return;
-    }
+    // Faces can be re-scanned out of order, so go to whichever is still missing.
+    const missing = next.findIndex((f) => !f);
+    if (missing !== -1) { setFaceIdx(missing); return; }
 
-    // All six captured. Classify every sticker in one pass now that the exact
-    // nine-per-colour quota applies — this is what settles red versus orange.
-    const allSamples: RGB[] = [];
-    next.forEach((f) => f!.samples.forEach((s) => allSamples.push(s)));
-
-    const assigned = assignCubeColors(allSamples);
-    // Anything the user corrected by hand wins over the classifier.
-    Object.entries(overrides).forEach(([idx, color]) => { assigned[Number(idx)] = color; });
-    for (let f = 0; f < 6; f++) assigned[f * 9 + 4] = f as Color;
-
-    const { valid, errors } = validate(assigned as CubeState);
-    if (valid) onComplete(assigned as CubeState);
-    else setValidationErrors(errors);
+    const result = finishScan(next.flatMap((f) => f!.samples), overrides);
+    if (result.errors.length === 0) onComplete(result.state, result.notes);
+    else setFailed(result);
   }
 
   function restart() {
@@ -282,8 +255,10 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
     setScanned(Array(6).fill(null));
     setPreview(null);
     setOverrides({});
-    setValidationErrors([]);
+    setFailed(null);
   }
+
+  const isLastFace = scanned.every((f, i) => i === faceIdx || f);
 
   if (cameraError) {
     return (
@@ -342,33 +317,25 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
       {preview && (
         <div className="flex flex-col gap-2">
           <p className="text-xs text-slate-400 text-center">Tap a cell to correct it</p>
-          <div className="grid gap-1 mx-auto" style={{ gridTemplateColumns: 'repeat(3, 2.5rem)' }}>
-            {preview.colors.map((color, i) => (
-              <button
-                key={i}
-                onClick={() => cycleCell(i)}
-                disabled={i === 4}
-                aria-label={`${COLOR_NAMES[color]}${i === 4 ? ' (centre, fixed)' : ''}`}
-                className={clsx(
-                  'w-10 h-10 rounded border-2 transition-transform',
-                  i === 4
-                    ? 'border-slate-400 cursor-default'
-                    : 'border-slate-600 hover:border-white hover:scale-110 cursor-pointer'
-                )}
-                style={{ backgroundColor: COLOR_HEX[color] }}
-              />
-            ))}
-          </div>
+          <FaceColorGrid colors={preview.colors} onCycle={cycleCell} />
         </div>
       )}
 
-      {validationErrors.length > 0 && (
+      {failed && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-300 flex flex-col gap-1">
           <span className="font-semibold text-red-400">That scan is not a solvable cube</span>
-          {validationErrors.map((e, i) => <span key={i}>• {e}</span>)}
-          <button onClick={restart} className="mt-1 text-xs underline text-red-400 hover:text-red-200 self-start">
-            Re-scan all faces
-          </button>
+          {failed.errors.map((e, i) => <span key={i}>• {e}</span>)}
+          <div className="mt-1 flex gap-4">
+            <button
+              onClick={() => onComplete(failed.state, [])}
+              className="text-xs underline text-red-400 hover:text-red-200"
+            >
+              Fix colours in the editor
+            </button>
+            <button onClick={restart} className="text-xs underline text-red-400 hover:text-red-200">
+              Re-scan all faces
+            </button>
+          </div>
         </div>
       )}
 
@@ -397,7 +364,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
               onClick={handleUseFace}
               className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold"
             >
-              {faceIdx < 5 ? 'Use This Face →' : 'Finish'}
+              {isLastFace ? 'Finish' : 'Use This Face →'}
             </button>
           </>
         )}
@@ -407,7 +374,8 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
         {Array.from({ length: 6 }, (_, i) => (
           <button
             key={i}
-            onClick={() => { if (scanned[i] || i < faceIdx) { setFaceIdx(i); setPreview(null); } }}
+            // A scanned face reopens its saved capture (corrections included) for review.
+            onClick={() => { setFaceIdx(i); setPreview(scanned[i]); }}
             title={`${FACE_NAMES[i]} face`}
             className={clsx(
               'w-2.5 h-2.5 rounded-full transition-colors',

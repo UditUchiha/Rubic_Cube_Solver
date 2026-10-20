@@ -8,13 +8,13 @@ Branch: `feature/camera-scan`, cut from `cpp`. The scanner, classifier and cube-
 
 | #   | Item | File(s) | Est. | Status |
 |-----|------|---------|------|--------|
-| 1.1 | Shared scan module + rotated-face auto-fix | `web/src/lib/scan.ts` (new) | 1.5h | ⬜ Todo |
-| 1.2 | Self-check script | `web/scripts/scan-selfcheck.ts` (new) | 0.5h | ⬜ Todo |
-| 1.3 | Shared colour-correction grid | `web/src/components/FaceColorGrid.tsx` (new) | 0.25h | ⬜ Todo |
-| 1.4 | Webcam: stale overrides, re-scan flow, editor hand-off | `WebcamScanner.tsx` | 1h | ⬜ Todo |
-| 1.5 | Upload: override bug, downscale, live re-extract, URL leak, hand-off | `ImageUpload.tsx` | 1.5h | ⬜ Todo |
-| 1.6 | Page: accept scans with notes, show them | `app/solve/page.tsx` | 0.5h | ⬜ Todo |
-| 1.7 | Delete unused `sampleRegion` | `lib/colorClassifier.ts` | 5m | ⬜ Todo |
+| 1.1 | Shared scan module + rotated-face auto-fix | `web/src/lib/scan.ts` (new) | 1.5h | ✅ Done |
+| 1.2 | Self-check script | `web/scripts/scan-selfcheck.ts` (new) | 0.5h | ✅ Done |
+| 1.3 | Shared colour-correction grid | `web/src/components/FaceColorGrid.tsx` (new) | 0.25h | ✅ Done |
+| 1.4 | Webcam: stale overrides, re-scan flow, editor hand-off | `WebcamScanner.tsx` | 1h | ✅ Done |
+| 1.5 | Upload: override bug, downscale, live re-extract, URL leak, hand-off | `ImageUpload.tsx` | 1.5h | ✅ Done |
+| 1.6 | Page: accept scans with notes, show them | `app/solve/page.tsx` | 0.5h | ✅ Done |
+| 1.7 | Delete unused `sampleRegion` | `lib/colorClassifier.ts` | 5m | ✅ Done |
 | 2.1 | Camera errors: HTTPS check, specific messages, Try again | `WebcamScanner.tsx` | 0.5h | ⬜ Todo |
 | 2.2 | Square frame on phones, bigger grid | `WebcamScanner.tsx` | 10m | ⬜ Todo |
 | 2.3 | Required orientation drawn on the grid | `WebcamScanner.tsx`, `ImageUpload.tsx` | 0.5h | ⬜ Todo |

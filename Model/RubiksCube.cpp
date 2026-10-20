@@ -301,62 +301,91 @@ string RubiksCube::getCornerColorString(uint8_t ind) const {
     return str;
 }
 
+// Facelets of each corner slot, in getCornerColorString() order. The index
+// functions below read colours straight from these instead of building a
+// string per call: they run three times per IDA* node, so the strings were
+// most of the solver's time.
+struct Facelet { RubiksCube::FACE face; unsigned row, col; };
+typedef RubiksCube::FACE FC;
+
+static const Facelet CORNER_FACELETS[8][3] = {
+        {{FC::UP, 2, 2}, {FC::FRONT, 0, 2}, {FC::RIGHT, 0, 0}}, // UFR
+        {{FC::UP, 2, 0}, {FC::FRONT, 0, 0}, {FC::LEFT, 0, 2}},  // UFL
+        {{FC::UP, 0, 0}, {FC::BACK, 0, 2},  {FC::LEFT, 0, 0}},  // UBL
+        {{FC::UP, 0, 2}, {FC::BACK, 0, 0},  {FC::RIGHT, 0, 2}}, // UBR
+        {{FC::DOWN, 0, 2}, {FC::FRONT, 2, 2}, {FC::RIGHT, 2, 0}}, // DFR
+        {{FC::DOWN, 0, 0}, {FC::FRONT, 2, 0}, {FC::LEFT, 2, 2}},  // DFL
+        {{FC::DOWN, 2, 2}, {FC::BACK, 2, 0},  {FC::RIGHT, 2, 2}}, // DBR
+        {{FC::DOWN, 2, 0}, {FC::BACK, 2, 2},  {FC::LEFT, 2, 0}},  // DBL
+};
+
+static const Facelet EDGE_FACELETS[12][2] = {
+        {{FC::UP, 2, 1},    {FC::FRONT, 0, 1}}, // UF
+        {{FC::UP, 1, 2},    {FC::RIGHT, 0, 1}}, // UR
+        {{FC::UP, 0, 1},    {FC::BACK, 0, 1}},  // UB
+        {{FC::UP, 1, 0},    {FC::LEFT, 0, 1}},  // UL
+        {{FC::DOWN, 0, 1},  {FC::FRONT, 2, 1}}, // DF
+        {{FC::DOWN, 1, 2},  {FC::RIGHT, 2, 1}}, // DR
+        {{FC::DOWN, 2, 1},  {FC::BACK, 2, 1}},  // DB
+        {{FC::DOWN, 1, 0},  {FC::LEFT, 2, 1}},  // DL
+        {{FC::FRONT, 1, 2}, {FC::RIGHT, 1, 0}}, // FR
+        {{FC::FRONT, 1, 0}, {FC::LEFT, 1, 2}},  // FL
+        {{FC::BACK, 1, 0},  {FC::RIGHT, 1, 2}}, // BR
+        {{FC::BACK, 1, 2},  {FC::LEFT, 1, 0}},  // BL
+};
+
+static inline int faceletColor(const RubiksCube &cube, const Facelet &f) {
+    return (int)cube.getColor(f.face, f.row, f.col);
+}
+
+// Colour values: W=0 G=1 R=2 B=3 O=4 Y=5, so opposite pairs are W/Y, G/B, R/O.
+static inline bool isWY(int c) { return c == 0 || c == 5; }
+static inline bool isRO(int c) { return c == 2 || c == 4; }
+
+// Corner id and orientation for every (colour, colour, colour) triple in slot
+// order, indexed a*36 + b*6 + c. Deciding them sticker by sticker branched
+// unpredictably on every corner of every node; a table lookup does not.
+struct CornerTables {
+    uint8_t id[216], ori[216];
+    CornerTables() {
+        for (int k = 0; k < 216; k++) {
+            const int col[3] = {k / 36, (k / 6) % 6, k % 6};
+            // Exactly one sticker from each opposite-colour pair must be present.
+            int nWY = 0, nRO = 0, nBG = 0, wyPos = 0;
+            uint8_t ret = 0;
+            for (int i = 0; i < 3; i++) {
+                int c = col[i];
+                if (isWY(c)) { nWY++; wyPos = i; if (c == 5) ret |= (1 << 2); }
+                else if (isRO(c)) { nRO++; if (c == 4) ret |= (1 << 1); }
+                else { nBG++; if (c == 1) ret |= (1 << 0); }
+            }
+            id[k] = (nWY == 1 && nRO == 1 && nBG == 1) ? ret : RubiksCube::INVALID_PIECE;
+            // The orientation is the position of the single W/Y sticker.
+            ori[k] = nWY == 1 ? (uint8_t)wyPos : RubiksCube::INVALID_PIECE;
+        }
+    }
+};
+static const CornerTables CORNER_TABLES;
+
+// Index into CORNER_TABLES, or -1 for a sticker that holds no valid colour.
+static inline int cornerKey(const RubiksCube &cube, uint8_t ind) {
+    const int a = faceletColor(cube, CORNER_FACELETS[ind][0]);
+    const int b = faceletColor(cube, CORNER_FACELETS[ind][1]);
+    const int c = faceletColor(cube, CORNER_FACELETS[ind][2]);
+    if ((unsigned)a > 5 || (unsigned)b > 5 || (unsigned)c > 5) return -1;
+    return a * 36 + b * 6 + c;
+}
+
 uint8_t RubiksCube::getCornerIndex(uint8_t ind) const {
-    string corner = getCornerColorString(ind);
-
-    // Exactly one sticker from each opposite-colour pair must be present.
-    int nWY = 0, nRO = 0, nBG = 0;
-    for (char c: corner) {
-        if (c == 'W' || c == 'Y') nWY++;
-        else if (c == 'R' || c == 'O') nRO++;
-        else if (c == 'B' || c == 'G') nBG++;
-    }
-    if (nWY != 1 || nRO != 1 || nBG != 1) return INVALID_PIECE;
-
-    uint8_t ret = 0;
-    for (auto c: corner) {
-        if (c != 'W' && c != 'Y') continue;
-        if (c == 'Y') {
-            ret |= (1 << 2);
-        }
-    }
-
-    for (auto c: corner) {
-        if (c != 'R' && c != 'O') continue;
-        if (c == 'O') {
-            ret |= (1 << 1);
-        }
-    }
-
-    for (auto c: corner) {
-        if (c != 'B' && c != 'G') continue;
-        if (c == 'G') {
-            ret |= (1 << 0);
-        }
-    }
-    return ret;
+    const int k = cornerKey(*this, ind);
+    return k < 0 ? INVALID_PIECE : CORNER_TABLES.id[k];
 }
 
 uint8_t RubiksCube::getCornerOrientation(uint8_t ind) const {
-    string corner = getCornerColorString(ind);
-
-    string actual_str = "";
-
-    for (auto c: corner) {
-        if (c != 'W' && c != 'Y') continue;
-        actual_str.push_back(c);
-    }
-
-    // A physically valid corner carries exactly one W/Y sticker. Miscoloured
-    // input used to index actual_str[0] on an empty string; report the piece
-    // as invalid instead so callers can reject the cube.
-    if (actual_str.size() != 1) return INVALID_PIECE;
-
-    if (corner[1] == actual_str[0]) {
-        return 1;
-    } else if (corner[2] == actual_str[0]) {
-        return 2;
-    } else return 0;
+    // A physically valid corner carries exactly one W/Y sticker; anything else
+    // is reported as invalid so callers can reject the cube.
+    const int k = cornerKey(*this, ind);
+    return k < 0 ? INVALID_PIECE : CORNER_TABLES.ori[k];
 }
 
 // 12 edges: primary facelet listed first (U/D for UD-layer, F/B for E-layer)
@@ -416,15 +445,6 @@ string RubiksCube::getEdgeColorString(uint8_t ind) const {
 }
 
 uint8_t RubiksCube::getEdgeIndex(uint8_t ind) const {
-    string edge = getEdgeColorString(ind);
-    // Map color letters to numeric indices: W=0 G=1 R=2 B=3 O=4 Y=5
-    auto toIdx = [](char c) -> int {
-        switch (c) {
-            case 'W': return 0; case 'G': return 1; case 'R': return 2;
-            case 'B': return 3; case 'O': return 4; case 'Y': return 5;
-            default: return -1;
-        }
-    };
     // lookup[color1][color2] = edge identity (0-11)
     static const uint8_t lookup[6][6] = {
       // W    G    R    B    O    Y
@@ -435,22 +455,21 @@ uint8_t RubiksCube::getEdgeIndex(uint8_t ind) const {
         {  2, 11,255, 10, 255,  6}, // O
         {255,  7,  4,  5,  6, 255}, // Y
     };
-    const int a = toIdx(edge[0]), b = toIdx(edge[1]);
-    if (a < 0 || b < 0) return INVALID_PIECE;
+    const int a = faceletColor(*this, EDGE_FACELETS[ind][0]);
+    const int b = faceletColor(*this, EDGE_FACELETS[ind][1]);
+    if (a < 0 || a > 5 || b < 0 || b > 5) return INVALID_PIECE;
     const uint8_t id = lookup[a][b];
     // 255 marks an impossible pair (two identical or two opposite colours).
     return id == 255 ? INVALID_PIECE : id;
 }
 
 uint8_t RubiksCube::getEdgeOrientation(uint8_t ind) const {
-    string edge = getEdgeColorString(ind);
-    char c1 = edge[0]; // primary facelet (U/D face for UD-layer, F/B face for E-layer)
-    char c2 = edge[1];
+    // c1 is the primary facelet (U/D face for UD-layer, F/B face for E-layer).
+    const int c1 = faceletColor(*this, EDGE_FACELETS[ind][0]);
+    const int c2 = faceletColor(*this, EDGE_FACELETS[ind][1]);
 
     // UD-type edge (contains W or Y): reference sticker is W/Y
-    if (c1 == 'W' || c1 == 'Y' || c2 == 'W' || c2 == 'Y') {
-        return (c1 == 'W' || c1 == 'Y') ? 0 : 1;
-    }
+    if (isWY(c1) || isWY(c2)) return isWY(c1) ? 0 : 1;
     // E-type edge (no W/Y): reference sticker is R/O
-    return (c1 == 'R' || c1 == 'O') ? 0 : 1;
+    return isRO(c1) ? 0 : 1;
 }

@@ -13,7 +13,9 @@ NibbleArray::NibbleArray(const size_t size, const uint8_t val) :
 uint8_t NibbleArray::get(const size_t pos) const {
     size_t i = pos / 2;
     assert(pos < this->size);
-    uint8_t val = this->arr.at(i);
+    // operator[], not at(): this is the solver's innermost lookup, and pos is
+    // already bounded by the assert and by the database index arithmetic.
+    uint8_t val = this->arr[i];
 
 //    Odd pos: last 4 bits
     if (pos % 2) {

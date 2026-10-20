@@ -33,18 +33,29 @@ private:
     bool haveDeadline;
     chrono::steady_clock::time_point deadline;
 
-    int heuristic(const T& cube) const {
-        int c  = (int)cornerDB->getNumMoves(cube);
-        int e1 = (int)edge1DB->getNumMoves(cube);
-        int e2 = (int)edge2DB->getNumMoves(cube);
-        // 0xF is the nibble array's "never written" fill. A complete database
-        // never yields it; treat it as 0 so a partially built database only
-        // makes the search slower, never wrong (an over-estimate would let
-        // IDA* return a non-optimal solution or miss one entirely).
-        if (c  == 0xF) c  = 0;
-        if (e1 == 0xF) e1 = 0;
-        if (e2 == 0xF) e2 = 0;
-        return max({c, e1, e2});
+    // 0xF is the nibble array's "never written" fill. A complete database
+    // never yields it; treat it as 0 so a partially built database only makes
+    // the search slower, never wrong (an over-estimate would let IDA* return a
+    // non-optimal solution or miss one entirely).
+    static int lookup(const PatternDatabase *db, const T& cube) {
+        int v = (int)db->getNumMoves(cube);
+        return v == 0xF ? 0 : v;
+    }
+
+    /*
+     * max(corner, edge1, edge2), except that it stops as soon as one database
+     * exceeds `limit`: the caller is about to cut that node, and a cut node
+     * only needs a value over the limit, not the exact maximum. Most children
+     * are cut, usually by the corner database alone, so this skips two of the
+     * three lookups (each a cache miss into a 20-40MB table) for most nodes.
+     * The returned value is still a lower bound, so optimality is unaffected.
+     */
+    int heuristic(const T& cube, int limit = numeric_limits<int>::max()) const {
+        int h = lookup(cornerDB, cube);
+        if (h > limit) return h;
+        h = max(h, lookup(edge1DB, cube));
+        if (h > limit) return h;
+        return max(h, lookup(edge2DB, cube));
     }
 
     void checkDeadline() {
@@ -96,7 +107,7 @@ private:
             // Evaluate the child before recursing. Most children are cut here,
             // and cutting them without a call saves the frame, the push/pop of
             // the move stack, and a redundant heuristic lookup.
-            const int childEstimate = heuristic(cube);
+            const int childEstimate = heuristic(cube, bound - depth - 1);
             const int childF = depth + 1 + childEstimate;
 
             if (childF > bound) {

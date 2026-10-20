@@ -98,12 +98,10 @@ public:
         uint64_t side = bitboard[(int) face];
         uint64_t color = (side >> (8 * idx)) & one_8;
 
-        int bit_pos = 0;
-        while (color != 0) {
-            color = color >> 1;
-            bit_pos++;
-        }
-        return (COLOR)(bit_pos - 1);
+        // Each sticker byte holds exactly one bit; its position is the colour.
+        // This runs ~120 times per IDA* heuristic, where a bit-scanning loop's
+        // unpredictable branch cost more than the database lookups themselves.
+        return color ? (COLOR)__builtin_ctzll(color) : (COLOR)(-1);
     }
 
     void setColor(FACE face, unsigned row, unsigned col, COLOR color) override {

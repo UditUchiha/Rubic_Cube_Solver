@@ -2,7 +2,7 @@
 
 import {
   Color, Face, CubeState, COLOR_HEX, COLOR_NAMES, FACE_NAMES,
-  setCell, createSolvedState,
+  setCell, createSolvedState, cubeSize,
 } from '@/lib/cubeState';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import clsx from 'clsx';
@@ -32,19 +32,21 @@ export default function ManualColorPicker({ state, onChange }: Props) {
   const [activeColor, setActiveColor] = useState<Color>(2); // default Red
   const [cellSize, setCellSize] = useState(36);
   const containerRef = useRef<HTMLDivElement>(null);
+  const n = cubeSize(state);
+  // Only a 3x3 has centres, and they are fixed by the face they sit on.
+  const isCentre = (row: number, col: number) => n === 3 && row === 1 && col === 1;
 
   // Compute cell size so the 4-wide cross fits the container width
   const computeSize = useCallback(() => {
     if (!containerRef.current) return;
     const w = containerRef.current.clientWidth;
-    // 4 faces wide, each 3 cells + 2 gaps (2px), plus 3 gaps between faces (4px)
-    // total_width = 4*(3*cs + 2*gap) + 3*faceGap
-    // Solve for cs: cs = (w - 3*4 - 4*2*2) / 12
+    // 4 faces wide, each n cells + (n-1) gaps (2px), plus 3 gaps between faces (4px)
+    // total_width = 4*(n*cs + (n-1)*gap) + 3*faceGap
     const faceGap = 4;
     const cellGap = 2;
-    const cs = Math.floor((w - 3 * faceGap - 4 * cellGap * 2) / 12);
+    const cs = Math.floor((w - 3 * faceGap - 4 * cellGap * (n - 1)) / (4 * n));
     setCellSize(Math.max(MIN_CELL, Math.min(MAX_CELL, cs)));
-  }, []);
+  }, [n]);
 
   useEffect(() => {
     computeSize();
@@ -54,16 +56,16 @@ export default function ManualColorPicker({ state, onChange }: Props) {
   }, [computeSize]);
 
   function handleCellClick(face: Face, row: number, col: number) {
-    if (row === 1 && col === 1) return; // center locked
+    if (isCentre(row, col)) return;
     onChange(setCell(state, face, row, col, activeColor));
   }
 
   function handleReset() {
-    onChange(createSolvedState());
+    onChange(createSolvedState(n));
   }
 
   const gap = Math.max(2, Math.floor(cellSize / 14));
-  const faceSize = cellSize * 3 + gap * 2;
+  const faceSize = cellSize * n + gap * (n - 1);
 
   return (
     <div className="flex flex-col gap-4">
@@ -139,11 +141,11 @@ export default function ManualColorPicker({ state, onChange }: Props) {
                 {FACE_NAMES[face]}
               </div>
 
-              {/* 3×3 grid of cells */}
+              {/* n×n grid of cells */}
               <div
                 className="grid rounded"
                 style={{
-                  gridTemplateColumns: `repeat(3, ${cellSize}px)`,
+                  gridTemplateColumns: `repeat(${n}, ${cellSize}px)`,
                   gap: `${gap}px`,
                   padding: `${gap}px`,
                   background: '#0d0d18',
@@ -151,11 +153,11 @@ export default function ManualColorPicker({ state, onChange }: Props) {
                   borderRadius: 6,
                 }}
               >
-                {Array.from({ length: 9 }, (_, i) => {
-                  const row = Math.floor(i / 3);
-                  const col = i % 3;
-                  const isCenter = row === 1 && col === 1;
-                  const color = state[face * 9 + i];
+                {Array.from({ length: n * n }, (_, i) => {
+                  const row = Math.floor(i / n);
+                  const col = i % n;
+                  const isCenter = isCentre(row, col);
+                  const color = state[face * n * n + i];
                   return (
                     <button
                       key={i}
@@ -189,7 +191,7 @@ export default function ManualColorPicker({ state, onChange }: Props) {
 
       {/* ── Hint ──────────────────────────────────────────────────────────── */}
       <p className="text-[11px] text-slate-600 leading-relaxed">
-        Select a color above, then click any sticker to paint it. Center cells are fixed.
+        Select a color above, then click any sticker to paint it.{n === 3 && ' Center cells are fixed.'}
       </p>
     </div>
   );

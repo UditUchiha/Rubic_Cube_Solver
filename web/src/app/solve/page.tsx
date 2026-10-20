@@ -6,12 +6,29 @@ import ManualColorPicker from '@/components/ManualColorPicker';
 import SolutionPlayer from '@/components/SolutionPlayer';
 import WebcamScanner from '@/components/WebcamScanner';
 import ImageUpload from '@/components/ImageUpload';
-import { CubeState, createSolvedState, serialize, validate, generateScramble } from '@/lib/cubeState';
+import {
+  CubeState, createSolvedState, serialize, deserialize, validate, generateScramble,
+  parseAlgorithm, applyMove, cubeSize, CubeSize,
+} from '@/lib/cubeState';
+import { solve2x2 } from '@/lib/cube2x2';
+import { solveBeginner, Stage } from '@/lib/beginnerSolver';
 import { twoPhaseSolver, SolverStatus } from '@/lib/twoPhaseSolver';
 
 type SolveStatus = 'idle' | 'loading' | 'solved' | 'error';
-type InputTab = 'manual' | 'camera' | 'upload';
-type SolveMode = 'fast' | 'optimal';
+type InputTab = 'manual' | 'notation' | 'camera' | 'upload';
+type SolveMode = 'fast' | 'optimal' | 'beginner';
+
+// What the IDA* backend reports about its search (see solver_api.cpp).
+type SearchStats = {
+  h: { corner: number; edge1: number; edge2: number };
+  iterations: [bound: number, nodes: number][];
+  nodes: number;
+};
+type SolveResult =
+  | { moves: string[]; ms: number | null; stats?: SearchStats | null; stages?: Stage[] }
+  | { error: string; stats?: SearchStats | null };
+
+const formatMs = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
 
 // Scramble length is not solution length: any cube is at most 20 moves from
 // solved (God's number) however long the scramble, so 25 costs nothing - a
@@ -32,7 +49,11 @@ export default function SolvePage() {
   const [cubeState, setCubeState] = useState<CubeState>(createSolvedState);
   const [inputTab, setInputTab] = useState<InputTab>('manual');
   const [solveStatus, setSolveStatus] = useState<SolveStatus>('idle');
-  const [solution, setSolution] = useState<string[]>([]);
+  const [results, setResults] = useState<Partial<Record<SolveMode, SolveResult>>>({});
+  // Which solver's result the player shows, once both have run.
+  const [shown, setShown] = useState<SolveMode>('fast');
+  const [comparing, setComparing] = useState(false);
+  const cubeGenRef = useRef(0);
   const [errorMsg, setErrorMsg] = useState('');
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
   const [slowLoad, setSlowLoad] = useState(false);
@@ -42,8 +63,15 @@ export default function SolvePage() {
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [mode, setMode] = useState<SolveMode>('fast');
   const [solverStatus, setSolverStatus] = useState<SolverStatus>('idle');
-  const [lastSolveMs, setLastSolveMs] = useState<number | null>(null);
+  const [notation, setNotation] = useState('');
+  const [notationError, setNotationError] = useState('');
+  const [copied, setCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  const n = cubeSize(cubeState);
+  const shownResult = results[shown];
+  const solution = shownResult && 'moves' in shownResult ? shownResult.moves : [];
+  const lastSolveMs = shownResult && 'moves' in shownResult ? shownResult.ms : null;
 
   // Build the two-phase pruning tables straight away. It takes a couple of
   // seconds in a worker, and starting now means it finishes long before the
@@ -53,6 +81,23 @@ export default function SolvePage() {
     const unsubscribe = twoPhaseSolver.onStatusChange(setSolverStatus);
     twoPhaseSolver.warmUp();
     return unsubscribe;
+  }, []);
+
+  // Load a shared cube from ?s=<54 colour letters>. Read from window.location
+  // rather than useSearchParams, which would need a Suspense boundary.
+  useEffect(() => {
+    const shared = new URLSearchParams(window.location.search).get('s');
+    if (!shared) return;
+    const state = deserialize(shared);
+    if (!state) {
+      setValidationErrors(['The shared link does not contain a valid cube.']);
+      return;
+    }
+    setCubeState(state);
+    // A 2x2 is checked by its solver instead, which knows when it is unsolvable.
+    if (state.length === 24) return;
+    const { valid, errors } = validate(state);
+    if (!valid) setValidationErrors(errors);
   }, []);
 
   // Only wake the optimal backend if the user actually wants it - on a free
@@ -79,17 +124,43 @@ export default function SolvePage() {
     };
   }, [solveStatus]);
 
-  function handleStateChange(next: CubeState) {
+  // The notation box describes the current cube only when the cube came from
+  // notation or a shuffle; any other change clears it so it never goes stale.
+  function handleStateChange(next: CubeState, nextNotation = '') {
     setCubeState(next);
+    setNotation(nextNotation);
+    setNotationError('');
     setValidationErrors([]);
-    if (solveStatus === 'error') setSolveStatus('idle');
+    // Results belong to one cube. Bumping the generation also drops any solve
+    // still in flight for the previous cube when it lands.
+    cubeGenRef.current++;
+    setResults({});
+    if (solveStatus !== 'loading') setSolveStatus('idle');
   }
 
   function handleShuffle() {
-    const { state } = generateScramble(shuffleDepth);
-    handleStateChange(state);
-    setSolveStatus('idle');
-    setSolution([]);
+    const { state, moves } = generateScramble(shuffleDepth, n);
+    handleStateChange(state, moves.join(' '));
+  }
+
+  function handleApplyNotation() {
+    const parsed = parseAlgorithm(notation);
+    if ('error' in parsed) {
+      setNotationError(parsed.error);
+      return;
+    }
+    handleStateChange(parsed.moves.reduce(applyMove, createSolvedState(n)), notation);
+    setInputTab('manual');
+  }
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(`${location.origin}/solve?s=${serialize(cubeState)}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard is blocked outside secure contexts; nothing useful to show.
+    }
   }
 
   function handleCancel() {
@@ -98,28 +169,25 @@ export default function SolvePage() {
     setLoadingMsgIdx(0);
   }
 
-  async function handleSolve() {
-    const { valid, errors } = validate(cubeState);
-    if (!valid) {
-      setValidationErrors(errors);
-      return;
+  // Never throws. Returns null only when the request was cancelled.
+  async function solveWith(which: SolveMode): Promise<SolveResult | null> {
+    if (which === 'beginner') {
+      try {
+        const started = performance.now();
+        const stages = solveBeginner(cubeState);
+        return { moves: stages.flatMap((st) => st.moves), ms: performance.now() - started, stages };
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : 'Solver failed' };
+      }
     }
-    setValidationErrors([]);
-    setSolveStatus('loading');
-    setLoadingMsgIdx(0);
-    setLastSolveMs(null);
 
-    if (mode === 'fast') {
+    if (which === 'fast') {
       try {
         const { moves, solveMs } = await twoPhaseSolver.solve(cubeState);
-        setSolution(moves);
-        setLastSolveMs(solveMs);
-        setSolveStatus('solved');
+        return { moves, ms: solveMs };
       } catch (err) {
-        setErrorMsg(err instanceof Error ? err.message : 'Solver failed');
-        setSolveStatus('error');
+        return { error: err instanceof Error ? err.message : 'Solver failed' };
       }
-      return;
     }
 
     const controller = new AbortController();
@@ -134,19 +202,83 @@ export default function SolvePage() {
         signal: controller.signal,
       });
       const data = await res.json();
+      // An older backend sends no stats; the report panel just stays hidden.
+      const stats = (data.stats ?? null) as SearchStats | null;
       if (data.success) {
-        setSolution(data.moves as string[]);
-        if (typeof data.elapsedMs === 'number') setLastSolveMs(data.elapsedMs);
-        setSolveStatus('solved');
-      } else {
-        setErrorMsg(data.error ?? 'Solver returned an error');
-        setSolveStatus('error');
+        return {
+          moves: data.moves as string[],
+          ms: typeof data.elapsedMs === 'number' ? data.elapsedMs : null,
+          stats,
+        };
       }
+      return { error: data.error ?? 'Solver returned an error', stats };
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
-      setErrorMsg('Network error — cannot reach the solver server.');
-      setSolveStatus('error');
+      if ((err as Error).name === 'AbortError') return null;
+      return {
+        error: navigator.onLine
+          ? 'Network error — cannot reach the solver server.'
+          : "You're offline. Fast mode still works without a connection.",
+      };
     }
+  }
+
+  function handleSizeChange(next: CubeSize) {
+    if (next === n) return;
+    handleStateChange(createSolvedState(next));
+    // Camera and upload scanning only know the 3x3 layout.
+    if (next === 2 && (inputTab === 'camera' || inputTab === 'upload')) setInputTab('manual');
+  }
+
+  // The 2x2 solver is optimal and takes ~150ms in the page, so it skips the
+  // fast/optimal split and the backend entirely.
+  function handleSolve2x2() {
+    const started = performance.now();
+    const result = solve2x2(cubeState);
+    if ('error' in result) {
+      setValidationErrors([result.error]);
+      return;
+    }
+    setValidationErrors([]);
+    setResults({ optimal: { moves: result.moves, ms: performance.now() - started } });
+    setShown('optimal');
+    setSolveStatus('solved');
+  }
+
+  async function handleSolve() {
+    if (n === 2) return handleSolve2x2();
+    const { valid, errors } = validate(cubeState);
+    if (!valid) {
+      setValidationErrors(errors);
+      return;
+    }
+    setValidationErrors([]);
+    setSolveStatus('loading');
+    setLoadingMsgIdx(0);
+    setResults({});
+
+    const gen = cubeGenRef.current;
+    const result = await solveWith(mode);
+    if (!result || gen !== cubeGenRef.current) return;
+
+    setResults({ [mode]: result });
+    setShown(mode);
+    if ('error' in result) {
+      setErrorMsg(result.error);
+      setSolveStatus('error');
+    } else {
+      setSolveStatus('solved');
+    }
+  }
+
+  // Solve the same cube with the other solver, to put the two side by side.
+  async function handleCompare() {
+    const other: SolveMode = shown === 'fast' ? 'optimal' : 'fast';
+    const gen = cubeGenRef.current;
+    setComparing(true);
+    const result = await solveWith(other);
+    setComparing(false);
+    if (!result || gen !== cubeGenRef.current) return;
+    setResults((prev) => ({ ...prev, [other]: result }));
   }
 
   return (
@@ -170,8 +302,25 @@ export default function SolvePage() {
             
             {/* Tab bar (wrapping gracefully on narrow screens) */}
             <div className="flex flex-wrap items-center gap-2">
+              <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5" role="group" aria-label="Cube size">
+                {([3, 2] as CubeSize[]).map((size) => (
+                  <button
+                    key={size}
+                    onClick={() => handleSizeChange(size)}
+                    disabled={solveStatus === 'loading'}
+                    aria-pressed={n === size}
+                    className={`px-3 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                      n === size
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    {size}×{size}
+                  </button>
+                ))}
+              </div>
               <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5">
-                {(['manual', 'camera', 'upload'] as InputTab[]).map((tab) => (
+                {((n === 3 ? ['manual', 'notation', 'camera', 'upload'] : ['manual', 'notation']) as InputTab[]).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setInputTab(tab)}
@@ -181,7 +330,7 @@ export default function SolvePage() {
                         : 'text-slate-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    {tab === 'manual' ? 'Manual' : tab === 'camera' ? 'Camera' : 'Upload'}
+                    {{ manual: 'Manual', notation: 'Notation', camera: 'Camera', upload: 'Upload' }[tab]}
                   </button>
                 ))}
               </div>
@@ -227,6 +376,31 @@ export default function SolvePage() {
             {/* Input Component */}
             <div className="min-h-[300px]">
               {inputTab === 'manual' && <ManualColorPicker state={cubeState} onChange={handleStateChange} />}
+              {inputTab === 'notation' && (
+                <div className="flex flex-col gap-3">
+                  <label htmlFor="notation" className="text-sm text-slate-400">
+                    Scramble from a solved cube, in face-turn notation (U L F R B D, with &apos; or 2).
+                  </label>
+                  <textarea
+                    id="notation"
+                    value={notation}
+                    onChange={(e) => { setNotation(e.target.value); setNotationError(''); }}
+                    placeholder="R U R' U' F2 D L2 B'"
+                    rows={4}
+                    spellCheck={false}
+                    className="w-full bg-slate-900/50 border border-white/10 rounded-xl p-3 font-mono text-sm text-slate-200 outline-none focus:border-indigo-500"
+                  />
+                  {notationError && (
+                    <p role="alert" className="text-sm text-red-400">{notationError}</p>
+                  )}
+                  <button
+                    onClick={handleApplyNotation}
+                    className="self-start px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold text-white transition-colors"
+                  >
+                    Apply scramble
+                  </button>
+                </div>
+              )}
               {inputTab === 'camera' && (
                 <WebcamScanner
                   onComplete={(state) => { handleStateChange(state); setInputTab('manual'); }}
@@ -257,8 +431,14 @@ export default function SolvePage() {
             {inputTab === 'manual' && (
               <div className="flex flex-col gap-3 mt-auto pt-2 border-t border-white/5">
 
+                {n === 2 && (
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    2×2 solver, running in your browser. Always finds the shortest solution.
+                  </p>
+                )}
+
                 {/* ── Fast vs optimal ───────────────────────────────────── */}
-                <div className="flex flex-col gap-1.5">
+                {n === 3 && <div className="flex flex-col gap-1.5">
                   <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5">
                     <button
                       onClick={() => setMode('fast')}
@@ -269,7 +449,7 @@ export default function SolvePage() {
                       }`}
                     >
                       Fast
-                      <span className="hidden sm:inline font-normal opacity-70"> · ~21 moves, instant</span>
+                      <span className="hidden sm:inline font-normal opacity-70"> · ~21 moves</span>
                     </button>
                     <button
                       onClick={() => setMode('optimal')}
@@ -280,12 +460,26 @@ export default function SolvePage() {
                       }`}
                     >
                       Optimal
-                      <span className="hidden sm:inline font-normal opacity-70"> · fewest moves, slow</span>
+                      <span className="hidden sm:inline font-normal opacity-70"> · fewest</span>
+                    </button>
+                    <button
+                      onClick={() => setMode('beginner')}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
+                        mode === 'beginner'
+                          ? 'bg-indigo-600 text-white shadow-md'
+                          : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      Beginner
+                      <span className="hidden sm:inline font-normal opacity-70"> · step by step</span>
                     </button>
                   </div>
 
                   <p className="text-[11px] text-slate-500 leading-relaxed">
-                    {mode === 'fast' ? (
+                    {mode === 'beginner' ? (
+                      <>Layer by layer, the way people learn to solve it: about 150 moves in seven
+                      named stages you can follow on a real cube.</>
+                    ) : mode === 'fast' ? (
                       solverStatus === 'ready' ? (
                         <>Two-phase solver, running in your browser. No server, no waiting.</>
                       ) : solverStatus === 'unavailable' ? (
@@ -300,13 +494,13 @@ export default function SolvePage() {
                       scramble depth — past {SLOW_SHUFFLE_DEPTH} moves it may time out.</>
                     )}
                   </p>
-                </div>
+                </div>}
 
                 <button
                   onClick={handleSolve}
                   disabled={
                     solveStatus === 'loading' ||
-                    (mode === 'fast' && solverStatus !== 'ready')
+                    (n === 3 && mode === 'fast' && solverStatus !== 'ready')
                   }
                   className="btn-shimmer relative w-full py-3.5 sm:py-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-white text-base sm:text-lg transition-all 
                     shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(99,102,241,0.5)] active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none overflow-hidden"
@@ -314,9 +508,9 @@ export default function SolvePage() {
                   {solveStatus === 'loading' ? (
                     <span className="flex items-center justify-center gap-3">
                       <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      {mode === 'fast' ? 'Solving…' : LOADING_MESSAGES[loadingMsgIdx]}
+                      {mode !== 'optimal' ? 'Solving…' : LOADING_MESSAGES[loadingMsgIdx]}
                     </span>
-                  ) : mode === 'fast' && solverStatus !== 'ready' ? (
+                  ) : n === 3 && mode === 'fast' && solverStatus !== 'ready' ? (
                     <span className="flex items-center justify-center gap-3">
                       <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       Preparing solver…
@@ -347,6 +541,11 @@ export default function SolvePage() {
                     {errorMsg}
                   </div>
                 )}
+
+                {/* A timed-out optimal search still says how far it got. */}
+                {solveStatus === 'error' && shownResult?.stats && (
+                  <SearchReport stats={shownResult.stats} />
+                )}
               </div>
             )}
           </div>
@@ -362,18 +561,32 @@ export default function SolvePage() {
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)" strokeWidth="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                     Solution Found
                   </h2>
+                  <button
+                    onClick={handleCopyLink}
+                    title="Copy a link to this cube"
+                    className="ml-auto mr-2 text-xs font-semibold px-2.5 py-1 text-slate-300 bg-slate-800 hover:bg-slate-700 rounded-md border border-white/5 transition-colors"
+                  >
+                    {copied ? 'Copied' : 'Copy link'}
+                  </button>
                   <span className="text-xs font-semibold px-2.5 py-1 bg-indigo-500/20 text-indigo-300 rounded-md border border-indigo-500/20">
                     {solution.length === 0 ? '0 moves' : `${solution.length} moves`}
                     {lastSolveMs !== null && (
-                      <span className="ml-1.5 font-normal opacity-70">
-                        {lastSolveMs < 1000
-                          ? `${Math.round(lastSolveMs)} ms`
-                          : `${(lastSolveMs / 1000).toFixed(1)} s`}
-                      </span>
+                      <span className="ml-1.5 font-normal opacity-70">{formatMs(lastSolveMs)}</span>
                     )}
                   </span>
                 </div>
-                
+
+                {n === 3 && shown !== 'beginner' && solution.length > 0 && (
+                  <CompareStrip
+                    results={results}
+                    shown={shown}
+                    comparing={comparing}
+                    canRunFast={solverStatus === 'ready'}
+                    onShow={setShown}
+                    onCompare={handleCompare}
+                  />
+                )}
+
                 <div className="flex-1 pt-2">
                   {solution.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center gap-3 text-center py-12">
@@ -384,9 +597,15 @@ export default function SolvePage() {
                       <p className="text-sm text-slate-400">Mix it up and try again.</p>
                     </div>
                   ) : (
-                    <SolutionPlayer initialState={cubeState} moves={solution} />
+                    <SolutionPlayer
+                      initialState={cubeState}
+                      moves={solution}
+                      stages={shownResult && 'moves' in shownResult ? shownResult.stages : undefined}
+                    />
                   )}
                 </div>
+
+                {shownResult?.stats && <SearchReport stats={shownResult.stats} />}
               </div>
             ) : solveStatus === 'loading' ? (
               // Loading Skeleton
@@ -415,7 +634,7 @@ export default function SolvePage() {
                 </div>
                 <h3 className="text-lg font-bold text-slate-300">Ready to Solve</h3>
                 <p className="text-sm text-slate-500 max-w-xs text-balance">
-                  Paint your cube state on the left, then click Solve to generate the optimal path.
+                  Paint your cube state on the left, then click Solve to generate a solution.
                 </p>
               </div>
             )}
@@ -423,5 +642,118 @@ export default function SolvePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+const MODE_LABEL: Record<SolveMode, string> = { fast: 'Fast', optimal: 'Optimal', beginner: 'Beginner' };
+
+function CompareStrip({ results, shown, comparing, canRunFast, onShow, onCompare }: {
+  results: Partial<Record<SolveMode, SolveResult>>;
+  shown: SolveMode;
+  comparing: boolean;
+  canRunFast: boolean;
+  onShow: (mode: SolveMode) => void;
+  onCompare: () => void;
+}) {
+  const other: SolveMode = shown === 'fast' ? 'optimal' : 'fast';
+
+  if (!results[other]) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <button
+          onClick={onCompare}
+          disabled={comparing || (other === 'fast' && !canRunFast)}
+          className="px-3 py-1.5 font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 rounded-md border border-white/5 transition-colors"
+        >
+          {comparing ? `Solving with ${MODE_LABEL[other]}…` : `Compare with ${MODE_LABEL[other]}`}
+        </button>
+        {other === 'optimal' && (
+          <span className="text-slate-500">Optimal can take up to 50 s on deep scrambles.</span>
+        )}
+      </div>
+    );
+  }
+
+  const fast = results.fast;
+  const optimal = results.optimal;
+  const saved =
+    fast && optimal && 'moves' in fast && 'moves' in optimal
+      ? fast.moves.length - optimal.moves.length
+      : null;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="grid grid-cols-2 gap-2">
+        {(['fast', 'optimal'] as SolveMode[]).map((m) => {
+          const r = results[m];
+          if (!r) return null;
+          return (
+            <button
+              key={m}
+              onClick={() => onShow(m)}
+              disabled={'error' in r}
+              aria-pressed={shown === m}
+              className={`text-left px-3 py-2 rounded-lg border text-xs transition-colors ${
+                shown === m
+                  ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-200'
+                  : 'bg-slate-800/50 border-white/5 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <span className="block font-semibold">{MODE_LABEL[m]}</span>
+              {'error' in r ? (
+                <span className="block text-red-400">{r.error}</span>
+              ) : (
+                <span className="block opacity-80">
+                  {r.moves.length} moves{r.ms !== null && ` · ${formatMs(r.ms)}`}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {saved !== null && (
+        <p className="text-xs text-slate-400">
+          {saved > 0
+            ? `Optimal saves ${saved} move${saved === 1 ? '' : 's'} over the two-phase solution.`
+            : 'Two-phase already found an optimal solution for this cube.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SearchReport({ stats }: { stats: SearchStats }) {
+  const { corner, edge1, edge2 } = stats.h;
+  const start = Math.max(corner, edge1, edge2);
+  return (
+    <details className="text-xs text-slate-400 bg-slate-900/40 border border-white/5 rounded-xl p-3">
+      <summary className="cursor-pointer font-semibold text-slate-300">How the search went</summary>
+      <div className="flex flex-col gap-3 mt-3">
+        <p>
+          Starting estimate: the largest of the three pattern databases,
+          max(corners {corner}, edges 1-6 {edge1}, edges 7-12 {edge2}) = <b>{start}</b> moves.
+          IDA* searches every path up to that bound, then raises the bound until a solution fits.
+        </p>
+        <table className="w-full font-mono">
+          <thead>
+            <tr className="text-slate-500">
+              <th className="text-left font-normal">Bound</th>
+              <th className="text-right font-normal">Nodes expanded</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.iterations.map(([bound, nodes]) => (
+              <tr key={bound}>
+                <td>{bound}</td>
+                <td className="text-right">{nodes.toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p>
+          {stats.nodes.toLocaleString()} nodes in total. Each extra move of depth multiplies the work, which is why Optimal slows down so sharply.
+        </p>
+      </div>
+    </details>
   );
 }

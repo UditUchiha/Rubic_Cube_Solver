@@ -1,5 +1,6 @@
 import type { CubeState } from './cubeState';
 import { applyMove, isSolved } from './cubeState';
+import { cacheForOffline } from './offline';
 import type { WorkerRequest, WorkerResponse } from './twoPhase.worker';
 
 /*
@@ -116,6 +117,7 @@ class TwoPhaseSolver {
         case 'ready':
           this.initMs = message.initMs;
           this.setStatus('ready');
+          cacheForOffline(message.scripts);
           break;
 
         case 'init-error':

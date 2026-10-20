@@ -287,6 +287,17 @@ export default function ImageUpload({ onComplete }: Props) {
                   />
                 </g>
               ))}
+              {/* Required neighbour colours inside the top and left edges, clear of the sample boxes. */}
+              <rect
+                x={currentFace.gridX} y={currentFace.gridY}
+                width={currentFace.gridSize} height={(currentFace.gridSize / 3) * 0.12}
+                fill={COLOR_HEX[orientation.top]} stroke="rgba(0,0,0,0.6)" strokeWidth={Math.max(1, currentFace.w / 800)}
+              />
+              <rect
+                x={currentFace.gridX} y={currentFace.gridY}
+                width={(currentFace.gridSize / 3) * 0.12} height={currentFace.gridSize}
+                fill={COLOR_HEX[orientation.left]} stroke="rgba(0,0,0,0.6)" strokeWidth={Math.max(1, currentFace.w / 800)}
+              />
               {/* Show exactly which pixels get sampled. */}
               {Array.from({ length: 9 }, (_, i) => {
                 const cell = currentFace.gridSize / 3;

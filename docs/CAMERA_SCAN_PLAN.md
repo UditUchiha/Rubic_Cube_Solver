@@ -15,11 +15,11 @@ Branch: `feature/camera-scan`, cut from `cpp`. The scanner, classifier and cube-
 | 1.5 | Upload: override bug, downscale, live re-extract, URL leak, hand-off | `ImageUpload.tsx` | 1.5h | ✅ Done |
 | 1.6 | Page: accept scans with notes, show them | `app/solve/page.tsx` | 0.5h | ✅ Done |
 | 1.7 | Delete unused `sampleRegion` | `lib/colorClassifier.ts` | 5m | ✅ Done |
-| 2.1 | Camera errors: HTTPS check, specific messages, Try again | `WebcamScanner.tsx` | 0.5h | ⬜ Todo |
-| 2.2 | Square frame on phones, bigger grid | `WebcamScanner.tsx` | 10m | ⬜ Todo |
-| 2.3 | Required orientation drawn on the grid | `WebcamScanner.tsx`, `ImageUpload.tsx` | 0.5h | ⬜ Todo |
-| 2.4 | Live colour preview + wrong-face warning | `WebcamScanner.tsx` | 1.5h | ⬜ Todo |
-| 2.5 | Auto-capture when steady (toggle) | `WebcamScanner.tsx` | 1h | ⬜ Todo |
+| 2.1 | Camera errors: HTTPS check, specific messages, Try again | `WebcamScanner.tsx` | 0.5h | ✅ Done |
+| 2.2 | Square frame on phones, bigger grid | `WebcamScanner.tsx` | 10m | ✅ Done |
+| 2.3 | Required orientation drawn on the grid | `WebcamScanner.tsx`, `ImageUpload.tsx` | 0.5h | ✅ Done |
+| 2.4 | Live colour preview + wrong-face warning | `WebcamScanner.tsx` | 1.5h | ✅ Done |
+| 2.5 | Auto-capture when steady (toggle) | `WebcamScanner.tsx` | 1h | ✅ Done |
 | 3.1 | "Take photo" button + HEIC message | `ImageUpload.tsx` | 0.5h | ⬜ Todo |
 | 3.2 | Pick several photos, match faces by centre colour | `ImageUpload.tsx`, `scan.ts`, `colorClassifier.ts` | 1.5h | ⬜ Todo |
 | 3.3 | Auto-place the grid on the cube (gated on fixtures) | `web/src/lib/locateGrid.ts` (new) | 3h + photos | ⬜ Todo |

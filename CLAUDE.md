@@ -16,6 +16,10 @@ cmake --build build
 # Run solver (shuffles 12 moves by default, then solves)
 .\build\rubiks_cube_solver.exe            # depth 12, 60s budget
 .\build\rubiks_cube_solver.exe 13 120     # depth 13, 120s budget (0 = no limit)
+.\build\rubiks_cube_solver.exe fast 25   # two-phase instead of IDA*: any depth, ~22 moves, ms
+
+# Two-phase self-check (200 fixed-seed 20-25 move scrambles, asserts on failure)
+.\build\test_two_phase.exe
 
 # Generate pattern databases (run once, takes hours, needs ~8GB RAM)
 .\build\generate_dbs.exe          # all 3 databases
@@ -27,7 +31,7 @@ cmake --build build
 cd web && npm run dev
 ```
 
-The project uses CMake (minimum 3.20) with C++14. Three executable targets: `rubiks_cube_solver`, `solver_api`, and `generate_dbs`.
+The project uses CMake (minimum 3.20) with C++14. Four executable targets: `rubiks_cube_solver`, `solver_api`, `generate_dbs`, and `test_two_phase`.
 
 `CMAKE_BUILD_TYPE` defaults to `Release`. Do not build the solver unoptimised — IDA* is a brute-force tree search and `-O0` is roughly 5-10x slower, which is the difference between a 13-move scramble solving in seconds and timing out.
 
@@ -50,6 +54,7 @@ All solvers are header-only templates parameterized on `<T, H>` (cube representa
 - **IDDFSSolver** — iterative deepening
 - **IDAstarSolver** — Korf's IDA* using 3 pattern databases (corner + 2 edge groups). Two constructors: one taking 3 database file paths (loads its own), one taking database references (shares already-loaded ones — use this when solving repeatedly). Heuristic: `max(cornerDB, edge1DB, edge2DB)`.
   `solve(timeLimitSeconds)` throws `SolverTimeout` when the budget runs out; `0` means no limit. Always pass a budget in a server context — solve cost grows ~5-8x per extra move (12 moves <1s, 13 ~10-20s, 15 ~10min), so an unbudgeted deep scramble looks indistinguishable from a hang.
+- **TwoPhaseSolver<T>** — Kociemba's two-phase algorithm: IDA* to G1 = <U,D,R2,L2,F2,B2>, then IDA* within G1. Not optimal (avg ~21.7 moves, max 22) but depth-insensitive: ~35ms average, <0.35s worst over 200 random 20-25 move scrambles, natively. `solve(timeLimitSeconds, target = 22)` stops at the first solution <= target, or returns the best found when the budget ends. Needs no pattern databases: ~8 MB of move/pruning tables built in 0.5-2s on first use (`twophase::tables()`, shared process-wide). The move cubies are read off this project's own `move()` on a solved cube rather than hand-written, so the search and the model cannot disagree; every solution is replayed on `T` before it is returned.
 
 ### Cube Validation (Model/CubeValidation.h)
 
@@ -86,8 +91,8 @@ Moves enum: L/L'/L2, R/R'/R2, U/U'/U2, D/D'/D2, F/F'/F2, B/B'/B2 (indices 0-17)
 
 Next.js 14 frontend (`web/`) with Three.js 3D cube visualization + Express backend (`server/`) calling the C++ solver via `child_process`.
 
-- `solver_api.cpp` — long-lived process: `solver_api [corner-db] [edge1-db] [edge2-db]`. Loads the databases once, then reads one 54-char state per line on stdin and writes `SOLUTION: <moves>` or `ERROR: <reason>` per line on stdout. Startup progress and `READY` go to stderr. `SOLVER_TIME_LIMIT` (seconds, default 50) bounds each solve; exceeding it returns an `ERROR:` line and keeps the process alive rather than dying and forcing a ~30s database reload.
-- `server/index.js` — Express server owning one long-lived solver process. Requests queue (bounded by `SOLVER_MAX_QUEUE`) rather than being rejected, since the solver handles one cube at a time. Restarts use exponential backoff and stop on a `FATAL:` line from the solver.
+- `solver_api.cpp` — long-lived process: `solver_api [corner-db] [edge1-db] [edge2-db]`. Loads the databases once, builds the two-phase tables, then reads one 54-char state per line on stdin, optionally prefixed `FAST ` (two-phase) or `OPTIMAL ` (IDA*, also the default for a bare state), and writes `SOLUTION: <moves>` or `ERROR: <reason>` per line on stdout. Startup progress and `READY` go to stderr. `SOLVER_TIME_LIMIT` (seconds, default 50) bounds each solve; exceeding it returns an `ERROR:` line and keeps the process alive rather than dying and forcing a ~30s database reload.
+- `server/index.js` — Express server owning one long-lived solver process. `POST /api/solve` takes `{ cubeState, mode }`, `mode` being `"optimal"` (default) or `"fast"`. Requests queue (bounded by `SOLVER_MAX_QUEUE`) rather than being rejected, since the solver handles one cube at a time. Restarts use exponential backoff and stop on a `FATAL:` line from the solver.
 - `web/src/components/RubiksCube3D.tsx` — Three.js interactive 3D cube (react-three-fiber)
 - `web/src/components/SolutionPlayer.tsx` — Animated solution playback with controls
 - `web/src/lib/cubeState.ts` — CubeState type, validation, move application

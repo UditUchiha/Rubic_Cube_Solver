@@ -25,6 +25,7 @@ set(COMMON_SOURCES
         Solver/BFSSolver.h
         Solver/IDDFSSolver.h
         Solver/IDAstarSolver.h
+        Solver/TwoPhaseSolver.h
         Model/CubeValidation.h
         PatternDatabases/NibbleArray.cpp
         PatternDatabases/NibbleArray.h
@@ -54,13 +55,17 @@ add_executable(generate_dbs
         generate_dbs.cpp
         ${COMMON_SOURCES})
 
+add_executable(test_two_phase
+        test_two_phase.cpp
+        ${COMMON_SOURCES})
+
 # Statically link libstdc++ and libgcc on every target, not just solver_api.
 # On Linux this avoids the GLIBCXX_3.4.32 error when a GCC-13-built binary runs
 # inside node:20-slim. On Windows it matters just as much: whichever
 # libstdc++-6.dll appears first on PATH wins, and picking up the one shipped
 # with Git for Windows instead of the toolchain's own segfaults on startup.
 if(NOT MSVC)
-    foreach(target rubiks_cube_solver solver_api generate_dbs)
+    foreach(target rubiks_cube_solver solver_api generate_dbs test_two_phase)
         target_link_options(${target} PRIVATE -static-libstdc++ -static-libgcc)
     endforeach()
 endif()

@@ -182,8 +182,13 @@ app.get('/health', (_req, res) => {
 });
 
 app.post('/api/solve', async (req, res) => {
-  const { cubeState } = req.body || {};
-  log(`POST /api/solve - cubeState=${cubeState}`);
+  // mode: "optimal" (default, Korf IDA*) or "fast" (two-phase, ~22 moves, any depth).
+  const { cubeState, mode = 'optimal' } = req.body || {};
+  log(`POST /api/solve - mode=${mode} cubeState=${cubeState}`);
+
+  if (mode !== 'optimal' && mode !== 'fast') {
+    return res.status(400).json({ success: false, error: 'mode must be "optimal" or "fast"' });
+  }
 
   if (!cubeState || typeof cubeState !== 'string') {
     return res.status(400).json({ success: false, error: 'Missing cubeState field' });
@@ -197,7 +202,7 @@ app.post('/api/solve', async (req, res) => {
 
   try {
     const start = Date.now();
-    const line = await sendToSolver(cubeState.toUpperCase());
+    const line = await sendToSolver((mode === 'fast' ? 'FAST ' : '') + cubeState.toUpperCase());
     const elapsed = Date.now() - start;
 
     if (line.startsWith('ERROR:')) {

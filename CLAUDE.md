@@ -110,7 +110,7 @@ This split exists because IDA* cost is exponential in depth and no amount of hos
 `web/src/lib/twoPhase.worker.ts` + `twoPhaseSolver.ts` implement Fast mode:
 - `initSolver()` builds pruning tables in ~1.5-3s and **blocks its thread**, so it only ever runs inside the worker, started on page mount so it overlaps with the user entering their cube. An earlier attempt (branch `feature/kociemba-threejs`) put this in a Vercel serverless route, which paid the full table build on every cold start — the algorithm there was correct, the placement was not.
 - `stateToFacelets()` maps this project's U L F R B D colour-index layout to cubejs's U R F D L B facelet-letter string, going via centre colours so the non-standard colour scheme (F=red, L=green) doesn't matter.
-- Every solution is replayed through `applyMove` before being returned; a move list that doesn't solve the cube raises instead of reaching the user.
+- Every solution is replayed through `applyMove` before being returned (in `browserSolver.ts`, for every in-browser solver); a move list that doesn't solve the cube raises instead of reaching the user.
 - An already-solved cube short-circuits to `[]` — two-phase otherwise returns a pointless 14-move identity sequence.
 
 - `solver_api.cpp` — long-lived process: `solver_api [corner-db] [edge1-db] [edge2-db]`. Loads the databases once, builds the two-phase tables, then reads one 54-char state per line on stdin, optionally prefixed `FAST ` (two-phase) or `OPTIMAL ` (IDA*, also the default for a bare state), and writes `SOLUTION: <moves>` or `ERROR: <reason>` per line on stdout. Startup progress and `READY` go to stderr. `SOLVER_TIME_LIMIT` (seconds, default 50) bounds each solve; exceeding it returns an `ERROR:` line and keeps the process alive rather than dying and forcing a ~30s database reload.
@@ -120,6 +120,18 @@ This split exists because IDA* cost is exponential in depth and no amount of hos
 - `web/src/lib/cubeState.ts` — CubeState type, validation, move application
 
 Deployment: Frontend on Vercel, Backend on Render. The backend is now optional — Fast mode works with it down, and `/health` is only pinged when the user selects Optimal, so a free-tier backend isn't woken on every page load. Backend env vars: `SOLVER_PATH`, `CORNER_DB_PATH`, `EDGE1_DB_PATH`, `EDGE2_DB_PATH`, `SOLVER_TIME_LIMIT`, `SOLVER_MAX_QUEUE`, `SOLVER_TIMEOUT`, `SOLVER_THREADS`.
+
+### Puzzles
+
+`/solve/[puzzle]` serves every puzzle from one page (`components/SolvePage.tsx`); `/solve` redirects to `/solve/3x3`. `web/src/lib/puzzles.ts` is the registry: each entry supplies its state model (solved state, `validate`, `applyMove`, scramble), an in-browser `BrowserSolver`, and flags for the C++ Optimal mode and camera input (3x3 only). Cube-family puzzles share `RubiksCube3D` and `ManualColorPicker` via their `layers` prop; state is `6 x layers^2` cells in the same U L F R B D layout. `browserSolver.ts` holds the worker plumbing, so a new solver is a worker file plus one `new BrowserSolver(...)`.
+
+**2x2** (`pocketCube.ts`, `pocket.worker.ts`) is solved optimally by a full BFS distance table — 3,674,160 states, one byte each, built in ~1.5s in its worker — and walked downhill. Its moves are derived from the 3x3 engine (a 2x2 turn is a 3x3 turn on the corner stickers). With no centres, the cube is recoloured so the piece in DBL counts as home, which fixes the target orientation without rotating the cube, so U/R/F solutions apply to the cube as held. Self-check, run from `web/`:
+
+```bash
+npx tsc src/lib/pocketCube.check.ts --outDir .check --module commonjs --target es2020 --skipLibCheck && node .check/pocketCube.check.js
+```
+
+It compares the table against the published depth distribution and replays 500 solves; run it after touching the 2x2 code or the 3x3 move engine.
 
 ### Scan input
 

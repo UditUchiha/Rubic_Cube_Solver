@@ -87,7 +87,7 @@ export const EDGES: [number, number][] = [
   [41, 12], // BL: B[1][2], L[1][0]
 ];
 
-const CORNER_NAMES = ['UFR', 'UFL', 'UBL', 'UBR', 'DFR', 'DFL', 'DBR', 'DBL'] as const;
+export const CORNER_NAMES = ['UFR', 'UFL', 'UBL', 'UBR', 'DFR', 'DFL', 'DBR', 'DBL'] as const;
 const EDGE_NAMES = ['UF', 'UR', 'UB', 'UL', 'DF', 'DR', 'DB', 'DL', 'FR', 'FL', 'BR', 'BL'] as const;
 
 /*
@@ -98,7 +98,7 @@ const EDGE_NAMES = ['UF', 'UR', 'UB', 'UL', 'DF', 'DR', 'DB', 'DL', 'FR', 'FL', 
  * summed raw, the total spreads evenly over 0/1/2 and carries no information.
  * Mirrors CORNER_CHIRALITY in Model/CubeValidation.h.
  */
-const CORNER_CHIRALITY = [+1, -1, +1, -1, -1, +1, +1, -1];
+export const CORNER_CHIRALITY = [+1, -1, +1, -1, -1, +1, +1, -1];
 
 function getCornerPieceId(state: CubeState, ci: number): number {
   const colors = CORNERS[ci].map((p) => state[p]);

@@ -376,7 +376,9 @@ export default function ImageUpload({ onComplete }: Props) {
         </div>
       ) : (
         <label className="flex flex-col items-center justify-center h-32 bg-slate-800/50 border-2 border-dashed border-slate-600 hover:border-slate-400 rounded-xl cursor-pointer transition-colors">
-          <span className="text-2xl mb-1">📷</span>
+          <svg className="mb-2 text-slate-400" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
           <span className="text-sm text-slate-400">Click to upload a photo</span>
           <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
         </label>

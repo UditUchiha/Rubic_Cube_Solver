@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: "Kubrick — Rubik's Cube Solver",
-  description: "Solve any Rubik's Cube in seconds with IDA* AI",
+  description: "Solve any Rubik's Cube in milliseconds, right in your browser.",
 };
 
 // Runs before first paint so a dark-mode visitor never sees a light flash.

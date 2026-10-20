@@ -3,6 +3,7 @@
 import { CubeState, computeCubeStates } from '@/lib/cubeState';
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import clsx from 'clsx';
+import SegmentedControl from './SegmentedControl';
 import RubiksCube3D from './RubiksCube3D';
 
 interface Props {
@@ -177,21 +178,13 @@ export default function SolutionPlayer({ initialState, moves }: Props) {
       </div>
 
       {/* ── Speed ─────────────────────────────────────────────────────────── */}
-      <div className="flex justify-center bg-slate-900/50 p-1 rounded-lg w-fit mx-auto border border-fg/10">
-        {SPEEDS.map(({ label, ms }) => (
-          <button
-            key={label}
-            onClick={() => setSpeed(ms)}
-            className={clsx(
-              'px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all',
-              speed === ms
-                ? 'bg-slate-700 text-fg shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            )}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex justify-center">
+        <SegmentedControl
+          label="Playback speed"
+          value={speed}
+          onChange={setSpeed}
+          options={SPEEDS.map(({ label, ms }) => ({ value: ms, label }))}
+        />
       </div>
 
       {/* ── Move Badges ───────────────────────────────────────────────────── */}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Header from '@/components/Header';
+import SegmentedControl from '@/components/SegmentedControl';
 import ManualColorPicker from '@/components/ManualColorPicker';
 import SolutionPlayer from '@/components/SolutionPlayer';
 import WebcamScanner from '@/components/WebcamScanner';
@@ -163,21 +164,16 @@ export default function SolvePage() {
             
             {/* Tab bar (wrapping gracefully on narrow screens) */}
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex bg-slate-900/50 p-1 rounded-xl border border-fg/10">
-                {(['manual', 'camera', 'upload'] as InputTab[]).map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setInputTab(tab)}
-                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                      inputTab === tab
-                        ? 'bg-indigo-600 text-white shadow-md'
-                        : 'text-slate-400 hover:text-fg hover:bg-fg/5'
-                    }`}
-                  >
-                    {tab === 'manual' ? 'Manual' : tab === 'camera' ? 'Camera' : 'Upload'}
-                  </button>
-                ))}
-              </div>
+              <SegmentedControl
+                label="Input method"
+                value={inputTab}
+                onChange={setInputTab}
+                options={[
+                  { value: 'manual', label: 'Manual' },
+                  { value: 'camera', label: 'Camera' },
+                  { value: 'upload', label: 'Upload' },
+                ]}
+              />
               
               {inputTab === 'manual' && (
                 <div className="ml-auto flex items-center gap-2">
@@ -252,30 +248,16 @@ export default function SolvePage() {
 
                 {/* ── Fast vs optimal ───────────────────────────────────── */}
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex bg-slate-900/50 p-1 rounded-xl border border-fg/10">
-                    <button
-                      onClick={() => setMode('fast')}
-                      className={`flex-1 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                        mode === 'fast'
-                          ? 'bg-indigo-600 text-white shadow-md'
-                          : 'text-slate-400 hover:text-fg hover:bg-fg/5'
-                      }`}
-                    >
-                      Fast
-                      <span className="hidden sm:inline font-normal opacity-70"> · ~21 moves, instant</span>
-                    </button>
-                    <button
-                      onClick={() => setMode('optimal')}
-                      className={`flex-1 px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
-                        mode === 'optimal'
-                          ? 'bg-indigo-600 text-white shadow-md'
-                          : 'text-slate-400 hover:text-fg hover:bg-fg/5'
-                      }`}
-                    >
-                      Optimal
-                      <span className="hidden sm:inline font-normal opacity-70"> · fewest moves, slow</span>
-                    </button>
-                  </div>
+                  <SegmentedControl
+                    label="Solver"
+                    stretch
+                    value={mode}
+                    onChange={setMode}
+                    options={[
+                      { value: 'fast', label: <>Fast<span className="hidden sm:inline font-normal opacity-70"> · ~21 moves, instant</span></> },
+                      { value: 'optimal', label: <>Optimal<span className="hidden sm:inline font-normal opacity-70"> · fewest moves, slow</span></> },
+                    ]}
+                  />
 
                   <p className="text-[11px] text-slate-500 leading-relaxed">
                     {mode === 'fast' ? (

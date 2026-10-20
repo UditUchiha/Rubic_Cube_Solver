@@ -224,7 +224,7 @@ app.post('/api/solve', async (req, res) => {
 startSolver();
 
 const server = app.listen(PORT, () => {
-  log(`Rubik's Cube Solver API listening on port ${PORT}`);
+  log(`Kubrick API listening on port ${PORT}`);
   log(`  Solver time limit: ${SOLVER_TIME_LIMIT}s, backstop timeout: ${TIMEOUT_MS}ms, max queue: ${MAX_QUEUE}`);
 });
 

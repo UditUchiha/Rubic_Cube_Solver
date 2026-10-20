@@ -3,7 +3,7 @@ import RubiksCube3D from '@/components/RubiksCube3D';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: "Rubik's Cube Solver — IDA* AI",
+  title: "Kubrick — Rubik's Cube Solver",
   description:
     "Input your scrambled Rubik's Cube and our IDA* solver finds the shortest possible solution in seconds, using 86 MB of corner and edge pattern databases.",
 };
@@ -66,7 +66,7 @@ export default function Home() {
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-widest"
             style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc' }}>
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse inline-block" />
-            Powered by IDA* Algorithm
+            Kubrick
           </span>
         </div>
 

@@ -13,11 +13,11 @@ type SolveStatus = 'idle' | 'loading' | 'solved' | 'error';
 type InputTab = 'manual' | 'camera' | 'upload';
 type SolveMode = 'fast' | 'optimal';
 
-// Two-phase runs in the browser and is insensitive to depth, so the only limit
-// that matters now is the optimal backend's. 20 is God's number - no scramble
-// can be deeper than that.
+// Scramble length is not solution length: any cube is at most 20 moves from
+// solved (God's number) however long the scramble, so 25 costs nothing - a
+// random-move scramble that long just lands on a typical ~18-move-deep state.
 const DEFAULT_SHUFFLE_DEPTH = 12;
-const MAX_SHUFFLE_DEPTH = 20;
+const MAX_SHUFFLE_DEPTH = 25;
 // Depth past which the *optimal* backend gets slow. Fast mode does not care.
 const SLOW_SHUFFLE_DEPTH = 13;
 
@@ -36,10 +36,8 @@ export default function SolvePage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [loadingMsgIdx, setLoadingMsgIdx] = useState(0);
   const [slowLoad, setSlowLoad] = useState(false);
-  // 12, not 20. The solver is optimal, so its cost grows ~5-8x per extra move:
-  // 12 returns in well under a second, 13 takes 10-20s, and past about 14 it
-  // runs longer than the request timeout. MAX_SHUFFLE_DEPTH caps the input at
-  // the last depth that still reliably comes back.
+  // Defaults to 12 so Optimal mode (cost ~5-8x per extra move) still returns;
+  // Fast mode handles any depth.
   const [shuffleDepth, setShuffleDepth] = useState(DEFAULT_SHUFFLE_DEPTH);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [mode, setMode] = useState<SolveMode>('fast');
@@ -160,7 +158,7 @@ export default function SolvePage() {
           <span className="hidden sm:inline">Back</span>
         </Link>
         <div className="h-4 w-px bg-slate-700 hidden sm:block" />
-        <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white">IDA* Solver</h1>
+        <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white">Kubrick</h1>
       </header>
 
       {/* ── Main Content ────────────────────────────────────────────────── */}

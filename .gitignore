@@ -57,3 +57,4 @@ web/.env*.local
 
 # Claude Code session data
 .claude/
+/preparation

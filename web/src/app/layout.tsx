@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: "Rubik's Cube Solver",
+  title: "Kubrick — Rubik's Cube Solver",
   description: "Solve any Rubik's Cube in seconds with IDA* AI",
 };
 

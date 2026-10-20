@@ -58,3 +58,6 @@ web/.env*.local
 # Claude Code session data
 .claude/
 /preparation
+
+# Playwright MCP screenshots and logs from local UI testing
+.playwright-mcp/

@@ -445,11 +445,11 @@ export default function SolvePage({ puzzleId }: { puzzleId: string }) {
             {/* Scan auto-corrections */}
             {inputTab === 'manual' && scanNotes.length > 0 && (
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 sm:p-4 animate-fade-in-up">
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-semibold text-sm mb-2">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-semibold text-sm mb-2">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                   Scan auto-corrected
                 </div>
-                <ul className="text-xs sm:text-sm text-amber-700/80 dark:text-amber-300/80 flex flex-col gap-1.5 ml-6 list-disc marker:text-amber-500/50">
+                <ul className="text-xs sm:text-sm text-amber-800/80 dark:text-amber-300/80 flex flex-col gap-1.5 ml-6 list-disc marker:text-amber-500/50">
                   {scanNotes.map((n, i) => <li key={i}>{n}</li>)}
                 </ul>
               </div>

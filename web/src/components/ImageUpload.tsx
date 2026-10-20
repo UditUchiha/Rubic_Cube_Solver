@@ -403,7 +403,7 @@ export default function ImageUpload({ onComplete }: Props) {
       {fileError && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-700 dark:text-red-300">{fileError}</div>
       )}
-      {matchNote && <p className="text-xs text-indigo-300" role="status">{matchNote}</p>}
+      {matchNote && <p className="text-xs text-indigo-700 dark:text-indigo-300" role="status">{matchNote}</p>}
 
       {currentFace && (
         <div className="flex flex-col gap-2">

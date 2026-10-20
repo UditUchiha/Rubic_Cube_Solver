@@ -10,6 +10,8 @@ declare module 'cubejs' {
     static random(): Cube;
     /** Returns a space-separated move list, or null if none within maxDepth. */
     solve(maxDepth?: number): string | null;
+    /** Apply a space-separated move list in place and return this cube. */
+    move(algorithm: string): Cube;
     isSolved(): boolean;
     asString(): string;
   }

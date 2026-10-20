@@ -33,6 +33,9 @@ private:
     bool haveDeadline;
     chrono::steady_clock::time_point deadline;
 
+    // (bound, nodes expanded) for each IDA* iteration of the last solve().
+    vector<pair<int, uint64_t>> iterations;
+
     /*
      * Threads split each IDA* iteration by subtree. Every thread walks the top
      * SPLIT_DEPTH plies itself (a few hundred nodes, identical in each thread)
@@ -250,6 +253,16 @@ public:
 
     uint64_t getNodesExpanded() const { return nodesExpanded; }
 
+    // Per-iteration stats of the last solve(), including a timed-out one.
+    const vector<pair<int, uint64_t>> &getIterations() const { return iterations; }
+
+    // The three pattern-database estimates whose max is the heuristic.
+    void heuristicParts(const T& cube, int &c, int &e1, int &e2) const {
+        c  = lookup(cornerDB, cube);
+        e1 = lookup(edge1DB, cube);
+        e2 = lookup(edge2DB, cube);
+    }
+
     /*
      * Find an optimal solution. `timeLimitSeconds <= 0` means no limit.
      *
@@ -265,6 +278,7 @@ public:
         if (threads == 0) threads = 1;
 
         moves.clear();
+        iterations.clear();
         nodesExpanded = 0;
         haveDeadline = timeLimitSeconds > 0.0;
         if (haveDeadline) {
@@ -281,7 +295,15 @@ public:
                         " moves - this cube state is not reachable by turning "
                         "a real cube");
             }
-            bound = searchBound(bound, threads);
+            iterations.push_back(make_pair(bound, (uint64_t)0));
+            const uint64_t start = nodesExpanded;
+            try {
+                bound = searchBound(bound, threads);
+            } catch (...) {
+                iterations.back().second = nodesExpanded - start;
+                throw;
+            }
+            iterations.back().second = nodesExpanded - start;
         }
 
         // Leave rubiksCube solved, as the single-threaded search used to.

@@ -4,7 +4,7 @@ import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { CubeState, COLOR_HEX, createSolvedState } from '@/lib/cubeState';
+import { CubeState, COLOR_HEX, createSolvedState, cubeSize } from '@/lib/cubeState';
 
 interface Props {
   state?: CubeState;
@@ -97,80 +97,85 @@ function useCubeResources() {
 
 type Resources = ReturnType<typeof useCubeResources>;
 
+type Pos = { x: number; y: number; z: number };
+
 /*
  * Which sticker of which face a cubie shows, as a function of its grid
- * position. Row/column here match the 54-cell layout: on U, row 0 is the back
- * row; on every side face, row 0 is the top row and column 0 is the left edge
- * as seen from outside that face.
+ * position. Coordinates run from -h to h, where h = (n-1)/2 (1 on a 3x3, 0.5
+ * on a 2x2). Row/column match the state layout: on U, row 0 is the back row;
+ * on every side face, row 0 is the top row and column 0 is the left edge as
+ * seen from outside that face.
  */
 const STICKER_FACES: {
   key: string;
   face: number;
-  visible: (p: { x: number; y: number; z: number }) => boolean;
-  cell: (p: { x: number; y: number; z: number }) => number;
+  visible: (p: Pos, h: number) => boolean;
+  /* row * n + col within the face */
+  cell: (p: Pos, h: number, n: number) => number;
   position: [number, number, number];
   rotation: [number, number, number];
 }[] = [
   {
     key: 'U', face: 0,
-    visible: ({ y }) => y === 1,
-    cell: ({ x, z }) => (z + 1) * 3 + (x + 1),
+    visible: ({ y }, h) => y === h,
+    cell: ({ x, z }, h, n) => (z + h) * n + (x + h),
     position: [0, STICKER_OFFSET, 0],
     rotation: [-Math.PI / 2, 0, 0],
   },
   {
     key: 'D', face: 5,
-    visible: ({ y }) => y === -1,
-    cell: ({ x, z }) => (1 - z) * 3 + (x + 1),
+    visible: ({ y }, h) => y === -h,
+    cell: ({ x, z }, h, n) => (h - z) * n + (x + h),
     position: [0, -STICKER_OFFSET, 0],
     rotation: [Math.PI / 2, 0, 0],
   },
   {
     key: 'F', face: 2,
-    visible: ({ z }) => z === 1,
-    cell: ({ x, y }) => (1 - y) * 3 + (x + 1),
+    visible: ({ z }, h) => z === h,
+    cell: ({ x, y }, h, n) => (h - y) * n + (x + h),
     position: [0, 0, STICKER_OFFSET],
     rotation: [0, 0, 0],
   },
   {
     key: 'B', face: 4,
-    visible: ({ z }) => z === -1,
-    cell: ({ x, y }) => (1 - y) * 3 + (1 - x),
+    visible: ({ z }, h) => z === -h,
+    cell: ({ x, y }, h, n) => (h - y) * n + (h - x),
     position: [0, 0, -STICKER_OFFSET],
     rotation: [0, Math.PI, 0],
   },
   {
     key: 'L', face: 1,
-    visible: ({ x }) => x === -1,
-    cell: ({ y, z }) => (1 - y) * 3 + (z + 1),
+    visible: ({ x }, h) => x === -h,
+    cell: ({ y, z }, h, n) => (h - y) * n + (z + h),
     position: [-STICKER_OFFSET, 0, 0],
     rotation: [0, -Math.PI / 2, 0],
   },
   {
     key: 'R', face: 3,
-    visible: ({ x }) => x === 1,
-    cell: ({ y, z }) => (1 - y) * 3 + (1 - z),
+    visible: ({ x }, h) => x === h,
+    cell: ({ y, z }, h, n) => (h - y) * n + (h - z),
     position: [STICKER_OFFSET, 0, 0],
     rotation: [0, Math.PI / 2, 0],
   },
 ];
 
 function Cubie({
-  x, y, z, state, res,
+  x, y, z, n, state, res,
 }: {
-  x: number; y: number; z: number; state: CubeState; res: Resources;
+  x: number; y: number; z: number; n: number; state: CubeState; res: Resources;
 }) {
   const pos = { x, y, z };
+  const h = (n - 1) / 2;
 
   return (
     <group position={[x * CUBIE_SPACING, y * CUBIE_SPACING, z * CUBIE_SPACING]}>
       <mesh geometry={res.cubieGeometry} material={res.cubieMaterial} />
       {STICKER_FACES.map((sf) =>
-        sf.visible(pos) ? (
+        sf.visible(pos, h) ? (
           <mesh
             key={sf.key}
             geometry={res.stickerGeometry}
-            material={res.stickerMaterials[state[sf.face * 9 + sf.cell(pos)]]}
+            material={res.stickerMaterials[state[sf.face * n * n + sf.cell(pos, h, n)]]}
             position={sf.position}
             rotation={sf.rotation}
           />
@@ -180,40 +185,43 @@ function Cubie({
   );
 }
 
-type CubieFilter = (pos: { x: number; y: number; z: number }) => boolean;
-
 /*
  * Rotation axis and signed angle for each move, matching the move engine in
  * cubeState.ts. Three.js is right-handed, so a clockwise turn seen from outside
  * a face is a negative rotation about that face's outward axis for U, R and F,
- * and a positive one for D, L and B.
+ * and a positive one for D, L and B. `side` picks the outer layer on that axis.
  */
-const MOVE_DEFS: Record<string, { axis: 'x' | 'y' | 'z'; angle: number; filter: CubieFilter }> = {
-  'U':  { axis: 'y', angle: -Math.PI / 2, filter: ({ y }) => y === 1 },
-  "U'": { axis: 'y', angle:  Math.PI / 2, filter: ({ y }) => y === 1 },
-  'U2': { axis: 'y', angle: -Math.PI,     filter: ({ y }) => y === 1 },
-  'D':  { axis: 'y', angle:  Math.PI / 2, filter: ({ y }) => y === -1 },
-  "D'": { axis: 'y', angle: -Math.PI / 2, filter: ({ y }) => y === -1 },
-  'D2': { axis: 'y', angle:  Math.PI,     filter: ({ y }) => y === -1 },
-  'R':  { axis: 'x', angle: -Math.PI / 2, filter: ({ x }) => x === 1 },
-  "R'": { axis: 'x', angle:  Math.PI / 2, filter: ({ x }) => x === 1 },
-  'R2': { axis: 'x', angle: -Math.PI,     filter: ({ x }) => x === 1 },
-  'L':  { axis: 'x', angle:  Math.PI / 2, filter: ({ x }) => x === -1 },
-  "L'": { axis: 'x', angle: -Math.PI / 2, filter: ({ x }) => x === -1 },
-  'L2': { axis: 'x', angle:  Math.PI,     filter: ({ x }) => x === -1 },
-  'F':  { axis: 'z', angle: -Math.PI / 2, filter: ({ z }) => z === 1 },
-  "F'": { axis: 'z', angle:  Math.PI / 2, filter: ({ z }) => z === 1 },
-  'F2': { axis: 'z', angle: -Math.PI,     filter: ({ z }) => z === 1 },
-  'B':  { axis: 'z', angle:  Math.PI / 2, filter: ({ z }) => z === -1 },
-  "B'": { axis: 'z', angle: -Math.PI / 2, filter: ({ z }) => z === -1 },
-  'B2': { axis: 'z', angle:  Math.PI,     filter: ({ z }) => z === -1 },
+const MOVE_DEFS: Record<string, { axis: 'x' | 'y' | 'z'; angle: number; side: 1 | -1 }> = {
+  'U':  { axis: 'y', angle: -Math.PI / 2, side: 1 },
+  "U'": { axis: 'y', angle:  Math.PI / 2, side: 1 },
+  'U2': { axis: 'y', angle: -Math.PI,     side: 1 },
+  'D':  { axis: 'y', angle:  Math.PI / 2, side: -1 },
+  "D'": { axis: 'y', angle: -Math.PI / 2, side: -1 },
+  'D2': { axis: 'y', angle:  Math.PI,     side: -1 },
+  'R':  { axis: 'x', angle: -Math.PI / 2, side: 1 },
+  "R'": { axis: 'x', angle:  Math.PI / 2, side: 1 },
+  'R2': { axis: 'x', angle: -Math.PI,     side: 1 },
+  'L':  { axis: 'x', angle:  Math.PI / 2, side: -1 },
+  "L'": { axis: 'x', angle: -Math.PI / 2, side: -1 },
+  'L2': { axis: 'x', angle:  Math.PI,     side: -1 },
+  'F':  { axis: 'z', angle: -Math.PI / 2, side: 1 },
+  "F'": { axis: 'z', angle:  Math.PI / 2, side: 1 },
+  'F2': { axis: 'z', angle: -Math.PI,     side: 1 },
+  'B':  { axis: 'z', angle:  Math.PI / 2, side: -1 },
+  "B'": { axis: 'z', angle: -Math.PI / 2, side: -1 },
+  'B2': { axis: 'z', angle:  Math.PI,     side: -1 },
 };
 
-const CUBIE_POSITIONS: { x: number; y: number; z: number }[] = [];
-for (let x = -1; x <= 1; x++)
-  for (let y = -1; y <= 1; y++)
-    for (let z = -1; z <= 1; z++)
-      if (x !== 0 || y !== 0 || z !== 0) CUBIE_POSITIONS.push({ x, y, z });
+// Every cubie on the surface of an n x n x n cube, centred on the origin.
+function cubiePositions(n: number): Pos[] {
+  const h = (n - 1) / 2;
+  const positions: Pos[] = [];
+  for (let x = -h; x <= h; x++)
+    for (let y = -h; y <= h; y++)
+      for (let z = -h; z <= h; z++)
+        if (Math.max(Math.abs(x), Math.abs(y), Math.abs(z)) === h) positions.push({ x, y, z });
+  return positions;
+}
 
 function CubeContent({
   state, move, animDuration, onMoveComplete, autoRotate, autoRotateSpeed,
@@ -229,6 +237,8 @@ function CubeContent({
   const layerRef = useRef<THREE.Group>(null);
   const [animStart, setAnimStart] = useState<number | null>(null);
   const res = useCubeResources();
+  const n = cubeSize(state);
+  const positions = useMemo(() => cubiePositions(n), [n]);
 
   useEffect(() => {
     if (move && MOVE_DEFS[move]) {
@@ -263,16 +273,18 @@ function CubeContent({
   });
 
   const def = move ? MOVE_DEFS[move] : null;
-  const turning = CUBIE_POSITIONS.filter((p) => def?.filter(p));
-  const still = CUBIE_POSITIONS.filter((p) => !def?.filter(p));
+  const inLayer = (p: Pos) => !!def && p[def.axis] === def.side * ((n - 1) / 2);
+  const turning = positions.filter(inLayer);
+  const still = positions.filter((p) => !inLayer(p));
 
-  const render = (p: { x: number; y: number; z: number }) => (
-    <Cubie key={`${p.x}${p.y}${p.z}`} x={p.x} y={p.y} z={p.z} state={state} res={res} />
+  const render = (p: Pos) => (
+    <Cubie key={`${p.x},${p.y},${p.z}`} x={p.x} y={p.y} z={p.z} n={n} state={state} res={res} />
   );
 
   return (
-    // A fixed tilt reads as a cube rather than a flat grid of squares.
-    <group ref={spinRef} rotation={[0.18, 0.5, 0]}>
+    // A fixed tilt reads as a cube rather than a flat grid of squares. Scaled
+    // so a 2x2 fills the same space as a 3x3.
+    <group ref={spinRef} rotation={[0.18, 0.5, 0]} scale={3 / n}>
       <group ref={layerRef}>{turning.map(render)}</group>
       <group>{still.map(render)}</group>
     </group>

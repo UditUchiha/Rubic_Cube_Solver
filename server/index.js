@@ -63,12 +63,23 @@ function startSolver() {
 
       log(`[solver stdout] ${line}`);
 
+      // STATS: precedes the answer for the same request; only SOLUTION: or
+      // ERROR: ends it.
+      if (pendingRequest && line.startsWith('STATS:')) {
+        try {
+          pendingRequest.stats = JSON.parse(line.slice('STATS:'.length));
+        } catch {
+          log(`[WARNING] Unparseable solver stats: ${line}`);
+        }
+        continue;
+      }
+
       if (pendingRequest) {
-        const { resolve, timer, reqId } = pendingRequest;
+        const { resolve, timer, reqId, stats } = pendingRequest;
         clearTimeout(timer);
         pendingRequest = null;
         log(`[req #${reqId}] Got response from solver`);
-        resolve(line);
+        resolve({ line, stats: stats || null });
         drainQueue();
       } else {
         log(`[WARNING] Solver output with no pending request: ${line}`);
@@ -202,19 +213,19 @@ app.post('/api/solve', async (req, res) => {
 
   try {
     const start = Date.now();
-    const line = await sendToSolver((mode === 'fast' ? 'FAST ' : '') + cubeState.toUpperCase());
+    const { line, stats } = await sendToSolver((mode === 'fast' ? 'FAST ' : '') + cubeState.toUpperCase());
     const elapsed = Date.now() - start;
 
     if (line.startsWith('ERROR:')) {
       const message = line.slice('ERROR:'.length).trim();
       log(`Solve failed (${elapsed}ms): ${message}`);
-      return res.status(400).json({ success: false, error: message });
+      return res.status(400).json({ success: false, error: message, stats });
     }
 
     const solutionStr = line.startsWith('SOLUTION:') ? line.slice('SOLUTION:'.length).trim() : line.trim();
     const moves = solutionStr ? solutionStr.split(/\s+/).filter(Boolean) : [];
     log(`Solved in ${elapsed}ms - ${moves.length} moves: ${solutionStr}`);
-    res.json({ success: true, moves, moveCount: moves.length, elapsedMs: elapsed });
+    res.json({ success: true, moves, moveCount: moves.length, elapsedMs: elapsed, stats });
   } catch (err) {
     log(`Solve error: ${err.message}`);
     const status =

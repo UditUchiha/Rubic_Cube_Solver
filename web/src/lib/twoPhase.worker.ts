@@ -21,7 +21,9 @@ export type WorkerRequest =
   | { type: 'solve'; id: number; facelets: string; maxDepth?: number };
 
 export type WorkerResponse =
-  | { type: 'ready'; initMs: number }
+  // scripts: what this worker loaded, which the page cannot see, so the
+  // service worker can cache it for offline use.
+  | { type: 'ready'; initMs: number; scripts: string[] }
   | { type: 'init-error'; error: string }
   | { type: 'solved'; id: number; moves: string[]; solveMs: number }
   | { type: 'solve-error'; id: number; error: string };
@@ -33,7 +35,11 @@ function ensureReady(): void {
   const started = performance.now();
   Cube.initSolver();
   ready = true;
-  const payload: WorkerResponse = { type: 'ready', initMs: performance.now() - started };
+  const payload: WorkerResponse = {
+    type: 'ready',
+    initMs: performance.now() - started,
+    scripts: [self.location.href, ...performance.getEntriesByType('resource').map((e) => e.name)],
+  };
   self.postMessage(payload);
 }
 

@@ -1,10 +1,17 @@
 // Face indices: UP=0 LEFT=1 FRONT=2 RIGHT=3 BACK=4 DOWN=5
 // Color values: WHITE=0 GREEN=1 RED=2 BLUE=3 ORANGE=4 YELLOW=5
 // Cell index within state: face*9 + row*3 + col
+// A 2x2 uses the same face order and orientation with 24 cells: face*4 + row*2 + col.
+// The array length is what tells the two apart.
 
 export type Color = 0 | 1 | 2 | 3 | 4 | 5;
 export type Face = 0 | 1 | 2 | 3 | 4 | 5;
 export type CubeState = Color[];
+export type CubeSize = 2 | 3;
+
+export function cubeSize(state: CubeState): CubeSize {
+  return state.length === 24 ? 2 : 3;
+}
 
 export const COLOR_NAMES = ['White', 'Green', 'Red', 'Blue', 'Orange', 'Yellow'] as const;
 export const COLOR_CHARS = ['W', 'G', 'R', 'B', 'O', 'Y'] as const;
@@ -18,11 +25,12 @@ export function idx(face: Face, row: number, col: number): number {
   return face * 9 + row * 3 + col;
 }
 
-export function createSolvedState(): CubeState {
-  const state: Color[] = new Array(54);
+export function createSolvedState(n: CubeSize = 3): CubeState {
+  const cells = n * n;
+  const state: Color[] = new Array(6 * cells);
   for (let face = 0; face < 6; face++) {
-    for (let i = 0; i < 9; i++) {
-      state[face * 9 + i] = face as Color;
+    for (let i = 0; i < cells; i++) {
+      state[face * cells + i] = face as Color;
     }
   }
   return state;
@@ -33,9 +41,9 @@ export function serialize(state: CubeState): string {
 }
 
 export function deserialize(str: string): CubeState | null {
-  if (str.length !== 54) return null;
-  const state: Color[] = new Array(54);
-  for (let i = 0; i < 54; i++) {
+  if (str.length !== 54 && str.length !== 24) return null;
+  const state: Color[] = new Array(str.length);
+  for (let i = 0; i < str.length; i++) {
     const ci = COLOR_CHARS.indexOf(str[i].toUpperCase() as typeof COLOR_CHARS[number]);
     if (ci === -1) return null;
     state[i] = ci as Color;
@@ -51,7 +59,7 @@ export interface ValidationResult {
 // ─── Parity helpers ────────────────────────────────────────────────────────
 // Corner sticker positions: [U/D_sticker, second, third]
 // Ported from RubiksCube.cpp::getCornerColorString()
-const CORNERS: [number, number, number][] = [
+export const CORNERS: [number, number, number][] = [
   [8, 20, 27],  // UFR: U[2][2], F[0][2], R[0][0]
   [6, 18, 11],  // UFL: U[2][0], F[0][0], L[0][2]
   [0, 38,  9],  // UBL: U[0][0], B[0][2], L[0][0]
@@ -64,7 +72,7 @@ const CORNERS: [number, number, number][] = [
 
 // Edge sticker positions: [primary, secondary]
 // Primary = U/D sticker for top/bottom edges, F sticker for equatorial
-const EDGES: [number, number][] = [
+export const EDGES: [number, number][] = [
   [7,  19], // UF: U[2][1], F[0][1]
   [5,  28], // UR: U[1][2], R[0][1]
   [1,  37], // UB: U[0][1], B[0][1]
@@ -263,8 +271,9 @@ export function setCell(
   col: number,
   color: Color
 ): CubeState {
+  const n = cubeSize(state);
   const next = [...state] as CubeState;
-  next[idx(face, row, col)] = color;
+  next[face * n * n + row * n + col] = color;
   return next;
 }
 
@@ -282,8 +291,44 @@ function rotateFace(state: Color[], faceIdx: number): void {
   for (let i = 0; i < 3; i++) state[base + (2 - i) * 3 + 0] = tmp[2 * 3 + (2 - i)];
 }
 
-// Apply a single move. Ported exactly from RubiksCube3dArray.cpp move methods.
+// Apply a single face turn to a 3x3 or 2x2 state.
 export function applyMove(state: CubeState, move: string): CubeState {
+  if (state.length === 24) {
+    const perm = move2x2Permutation(move);
+    return perm ? perm.map((i) => state[i]) : [...state];
+  }
+  return applyMove3x3(state, move);
+}
+
+/*
+ * A 2x2 sticker is a 3x3 corner sticker: (face, r, c) -> (face, 2r, 2c), and
+ * 3x3 face turns only ever move corner stickers onto corner stickers. So each
+ * 2x2 move is read off the 3x3 engine by turning a labelled cube once, rather
+ * than written out a second time by hand.
+ */
+const CELL_2X2_TO_3X3 = Array.from({ length: 24 }, (_, i) => {
+  const face = Math.floor(i / 4);
+  const row = Math.floor((i % 4) / 2);
+  const col = i % 2;
+  return face * 9 + row * 6 + col * 2;
+});
+const perms2x2 = new Map<string, number[]>();
+
+/* For 2x2 move m: next[k] = state[perm[k]]. Undefined for a non-face-turn. */
+export function move2x2Permutation(move: string): number[] | undefined {
+  if (!(move in MOVE_FACE)) return undefined;
+  let perm = perms2x2.get(move);
+  if (!perm) {
+    const labels = Array.from({ length: 54 }, (_, i) => i) as unknown as CubeState;
+    const moved = applyMove3x3(labels, move) as unknown as number[];
+    perm = CELL_2X2_TO_3X3.map((cell) => CELL_2X2_TO_3X3.indexOf(moved[cell]));
+    perms2x2.set(move, perm);
+  }
+  return perm;
+}
+
+// Ported exactly from RubiksCube3dArray.cpp move methods.
+function applyMove3x3(state: CubeState, move: string): CubeState {
   const s = [...state] as Color[];
   const g = (face: number, row: number, col: number) => s[face * 9 + row * 3 + col];
   const set = (face: number, row: number, col: number, v: Color) => {
@@ -405,6 +450,10 @@ export function computeCubeStates(initial: CubeState, moves: string[]): CubeStat
 }
 
 export function isSolved(state: CubeState): boolean {
+  // A 2x2 has no centres, so any orientation with uniform faces is solved.
+  if (state.length === 24) {
+    return state.every((c, i) => c === state[i - (i % 4)]);
+  }
   for (let face = 0; face < 6; face++) {
     for (let i = 0; i < 9; i++) {
       if (state[face * 9 + i] !== face) return false;
@@ -437,8 +486,8 @@ const MOVE_FACE: Record<string, number> = {
  * a second, 13 takes 10-20s, and from about 15 it runs past any request
  * timeout worth setting. A 20-move scramble simply never came back.
  */
-export function generateScramble(moveCount = 12): { state: CubeState; moves: string[] } {
-  let state = createSolvedState();
+export function generateScramble(moveCount = 12, n: CubeSize = 3): { state: CubeState; moves: string[] } {
+  let state = createSolvedState(n);
   const moves: string[] = [];
   let lastFace = -1;
   let beforeLastFace = -1;
@@ -463,4 +512,24 @@ export function generateScramble(moveCount = 12): { state: CubeState; moves: str
   }
 
   return { state, moves };
+}
+
+/*
+ * Parse face-turn notation such as "R U R' F2". Only the 18 face moves are
+ * accepted: wide moves, slices and rotations move the centres, and this
+ * project's state layout fixes each centre to its face. applyMove silently
+ * ignores unknown moves, so rejecting them here is what stops a typo from
+ * producing a wrong cube.
+ */
+export function parseAlgorithm(text: string): { moves: string[] } | { error: string } {
+  const tokens = text.replace(/[’′`]/g, "'").split(/\s+/).filter(Boolean);
+  const moves: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const move = tokens[i].replace(/^([ULFRBD])2'$/, '$12');
+    if (!(move in MOVE_FACE)) {
+      return { error: `Move ${i + 1} "${tokens[i]}" is not a face turn (use U L F R B D with ' or 2)` };
+    }
+    moves.push(move);
+  }
+  return { moves };
 }

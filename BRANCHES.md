@@ -17,6 +17,23 @@ main              production baseline (Vercel + Render deploy from here)
 
 `server/` and the C++ solver are the same on all three, so one Render backend serves whichever frontend is live.
 
+### Feature branches and `full`
+
+Each feature branch is deployable on its own. None of them merges into another; they only meet in `full`.
+
+| Branch | Built on | Adds |
+|---|---|---|
+| `perf/ida-star` | `cpp` | ~4x faster IDA* nodes, multi-threaded search (`SOLVER_THREADS`), `benchmark` command |
+| `feature/cpp-two-phase` | `cpp` | Kociemba two-phase in C++; `mode: "fast"` on `/api/solve` |
+| `feature/next-features` | `js` | Tests, notation input, share links, keyboard player, Fast vs Optimal compare, IDA* search report, PWA/offline, Beginner mode |
+| `feature/multi-puzzle` | `js` | `/solve/[puzzle]` registry and an optimal in-browser 2x2 |
+| `feature/camera-scan` | `cpp` | Scan fixes, rotated-face auto-fix, live webcam preview, multi-photo upload. Already merged into `cpp`, so every branch has it |
+| `full` | `ui-threejs` | Everything above, plus a four-solver picker: Instant (cubejs), Fast (C++ two-phase), Optimal (IDA*), Beginner |
+
+**Render should build from `full`.** Its backend only adds to the API (`mode`, `stats`), so it serves every frontend variant, and every variant's Optimal mode gets the threaded solver.
+
+After merging a fix up the stack, merge `ui-threejs` into `full` too.
+
 `default-cpp-implementation` is the old working branch (same code as `js`) and `feature/kociemba-threejs` is an abandoned serverless attempt. Neither is maintained.
 
 ## Rules

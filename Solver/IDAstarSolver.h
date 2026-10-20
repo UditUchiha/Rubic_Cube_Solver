@@ -33,17 +33,12 @@ private:
     bool haveDeadline;
     chrono::steady_clock::time_point deadline;
 
+    // (bound, nodes expanded) for each IDA* iteration of the last solve().
+    vector<pair<int, uint64_t>> iterations;
+
     int heuristic(const T& cube) const {
-        int c  = (int)cornerDB->getNumMoves(cube);
-        int e1 = (int)edge1DB->getNumMoves(cube);
-        int e2 = (int)edge2DB->getNumMoves(cube);
-        // 0xF is the nibble array's "never written" fill. A complete database
-        // never yields it; treat it as 0 so a partially built database only
-        // makes the search slower, never wrong (an over-estimate would let
-        // IDA* return a non-optimal solution or miss one entirely).
-        if (c  == 0xF) c  = 0;
-        if (e1 == 0xF) e1 = 0;
-        if (e2 == 0xF) e2 = 0;
+        int c, e1, e2;
+        heuristicParts(cube, c, e1, e2);
         return max({c, e1, e2});
     }
 
@@ -158,6 +153,23 @@ public:
 
     uint64_t getNodesExpanded() const { return nodesExpanded; }
 
+    // Per-iteration stats of the last solve(), including a timed-out one.
+    const vector<pair<int, uint64_t>> &getIterations() const { return iterations; }
+
+    // The three pattern-database estimates whose max is the heuristic.
+    void heuristicParts(const T& cube, int &c, int &e1, int &e2) const {
+        c  = (int)cornerDB->getNumMoves(cube);
+        e1 = (int)edge1DB->getNumMoves(cube);
+        e2 = (int)edge2DB->getNumMoves(cube);
+        // 0xF is the nibble array's "never written" fill. A complete database
+        // never yields it; treat it as 0 so a partially built database only
+        // makes the search slower, never wrong (an over-estimate would let
+        // IDA* return a non-optimal solution or miss one entirely).
+        if (c  == 0xF) c  = 0;
+        if (e1 == 0xF) e1 = 0;
+        if (e2 == 0xF) e2 = 0;
+    }
+
     /*
      * Find an optimal solution. `timeLimitSeconds <= 0` means no limit.
      *
@@ -168,6 +180,7 @@ public:
      */
     vector<RubiksCube::MOVE> solve(double timeLimitSeconds = 0.0) {
         moves.clear();
+        iterations.clear();
         nodesExpanded = 0;
         haveDeadline = timeLimitSeconds > 0.0;
         if (haveDeadline) {
@@ -184,7 +197,15 @@ public:
                         " moves - this cube state is not reachable by turning "
                         "a real cube");
             }
-            bound = IDAstar(rubiksCube, 0, bound, heuristic(rubiksCube));
+            iterations.push_back(make_pair(bound, (uint64_t)0));
+            const uint64_t start = nodesExpanded;
+            try {
+                bound = IDAstar(rubiksCube, 0, bound, heuristic(rubiksCube));
+            } catch (...) {
+                iterations.back().second = nodesExpanded - start;
+                throw;
+            }
+            iterations.back().second = nodesExpanded - start;
         }
 
         return moves;

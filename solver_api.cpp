@@ -54,6 +54,28 @@ static RubiksCubeBitboard parseCube(const string &input) {
     return cube;
 }
 
+typedef IDAstarSolver<RubiksCubeBitboard, HashBitboard> Solver;
+
+// One-line JSON for the "how the search went" panel. Takes the scrambled cube
+// because the search leaves solver.rubiksCube solved. Hand-formatted: C++14,
+// no JSON library, and every value is a number.
+static string statsJson(const Solver &solver, const RubiksCubeBitboard &scrambled) {
+    int c, e1, e2;
+    solver.heuristicParts(scrambled, c, e1, e2);
+    ostringstream out;
+    out << "{\"h\":{\"corner\":" << c << ",\"edge1\":" << e1 << ",\"edge2\":" << e2
+        << "},\"iterations\":[";
+    const auto &its = solver.getIterations();
+    for (size_t i = 0; i < its.size(); i++) {
+        if (i > 0) out << ",";
+        out << "[" << its[i].first << "," << its[i].second << "]";
+    }
+    out << "],\"nodes\":" << solver.getNodesExpanded() << "}";
+    return out.str();
+}
+
+// Prints a STATS: line before returning or timing out, so the server can
+// attach it to either the solution or the timeout error.
 static string solveCube(const string &input, CornerPatternDatabase &cornerDB,
                         EdgePatternDatabase &edge1DB, EdgePatternDatabase &edge2DB,
                         double timeLimitSeconds) {
@@ -61,8 +83,15 @@ static string solveCube(const string &input, CornerPatternDatabase &cornerDB,
 
     if (cube.isSolved()) return "";
 
-    IDAstarSolver<RubiksCubeBitboard, HashBitboard> solver(cube, cornerDB, edge1DB, edge2DB);
-    vector<RubiksCube::MOVE> moves = solver.solve(timeLimitSeconds);
+    Solver solver(cube, cornerDB, edge1DB, edge2DB);
+    vector<RubiksCube::MOVE> moves;
+    try {
+        moves = solver.solve(timeLimitSeconds);
+    } catch (const SolverTimeout &) {
+        cout << "STATS: " << statsJson(solver, cube) << endl;
+        throw;
+    }
+    cout << "STATS: " << statsJson(solver, cube) << endl;
 
     // Never hand back a solution we have not checked. A wrong move list is far
     // worse than an error: the user would turn a real cube into a worse mess.

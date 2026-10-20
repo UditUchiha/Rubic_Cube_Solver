@@ -99,3 +99,9 @@ Deployment: Frontend on Vercel, Backend on Render. Backend env vars: `SOLVER_PAT
 `web/src/lib/colorClassifier.ts` classifies all 54 stickers in one pass (`assignCubeColors`) under an exact nine-per-colour quota, using the six centre stickers as live references for the current lighting. Per-sticker threshold classification is kept only for live previews — deciding each sticker alone is what makes red and orange flip under warm light.
 
 Each face has a fixed orientation inside the 54-char state. The scanners show the required top and left neighbour colours per face, because a face captured 90 degrees out produces a correctly-coloured, unsolvable cube.
+
+`web/src/lib/scan.ts` owns `FACE_ORIENTATION` and `finishScan`; both scanners (`WebcamScanner`, `ImageUpload`) finish through it. Manual corrections are recorded explicitly as `Overrides` and dropped per face whenever that face's samples are replaced. When a scan fails validation, `finishScan` tries quarter-turns of up to two faces and keeps the fewest that make the cube solvable (one face recovered 99.8% of the time, two 99.4%). About 0.7% of scans with a real colour mistake get "fixed" into a different valid cube, so a fix is always returned as a note the solve page shows; never apply it silently. A scan that still fails lands in the manual editor with its errors.
+
+Uploaded photos are downscaled to 1600 px on the long side before sampling: iOS Safari caps a canvas at ~16.7 MP and draws larger photos blank. Several photos picked at once are matched to faces by centre colour over all of them together (`matchPhotosToFaces`).
+
+Self-check for the scan logic: `cd web && npx --yes tsx scripts/scan-selfcheck.ts`.

@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import RubiksCube3D from '@/components/RubiksCube3D';
+import HeroCube from '@/components/HeroCube';
+import CubeField from '@/components/CubeField';
 import Header from '@/components/Header';
 import type { Metadata } from 'next';
 
@@ -67,12 +68,8 @@ export default function Home() {
     <Header />
     <main className="relative min-h-screen flex flex-col overflow-hidden" style={{ background: 'var(--bg)' }}>
 
-      {/* ── Aurora background ────────────────────────────────────────────── */}
-      <div className="aurora" aria-hidden>
-        <div className="aurora-blob aurora-blob-1" />
-        <div className="aurora-blob aurora-blob-2" />
-        <div className="aurora-blob aurora-blob-3" />
-      </div>
+      {/* ── 3D background ────────────────────────────────────────────────── */}
+      <CubeField />
 
       {/* ── Subtle grid overlay ──────────────────────────────────────────── */}
       <div
@@ -100,7 +97,7 @@ export default function Home() {
             This used to carry `pointer-events-none`, which silently disabled
             OrbitControls while the cube still advertised a grab cursor. */}
         <div className="animate-fade-in-up-d1 animate-float mb-6 sm:mb-8 h-[220px] w-[220px] sm:h-[280px] sm:w-[280px]">
-          <RubiksCube3D fill autoRotate interactive />
+          <HeroCube />
         </div>
 
         {/* Heading */}

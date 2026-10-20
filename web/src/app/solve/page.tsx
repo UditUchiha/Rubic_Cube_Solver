@@ -7,7 +7,8 @@ import ManualColorPicker from '@/components/ManualColorPicker';
 import SolutionPlayer from '@/components/SolutionPlayer';
 import WebcamScanner from '@/components/WebcamScanner';
 import ImageUpload from '@/components/ImageUpload';
-import { CubeState, createSolvedState, serialize, validate, generateScramble } from '@/lib/cubeState';
+import RubiksCube3D from '@/components/RubiksCube3D';
+import { Color, CubeState, Face, createSolvedState, serialize, setCell, validate, generateScramble } from '@/lib/cubeState';
 import { twoPhaseSolver, SolverStatus } from '@/lib/twoPhaseSolver';
 
 type SolveStatus = 'idle' | 'loading' | 'solved' | 'error';
@@ -31,6 +32,7 @@ const LOADING_MESSAGES = [
 
 export default function SolvePage() {
   const [cubeState, setCubeState] = useState<CubeState>(createSolvedState);
+  const [activeColor, setActiveColor] = useState<Color>(2); // Red
   const [inputTab, setInputTab] = useState<InputTab>('manual');
   const [solveStatus, setSolveStatus] = useState<SolveStatus>('idle');
   const [solution, setSolution] = useState<string[]>([]);
@@ -79,6 +81,12 @@ export default function SolvePage() {
       clearTimeout(slowTimer);
     };
   }, [solveStatus]);
+
+  // Painting on the 3D preview; same rules as the flat net (centres are fixed).
+  function paintSticker(index: number) {
+    if (index % 9 === 4) return;
+    handleStateChange(setCell(cubeState, Math.floor(index / 9) as Face, Math.floor((index % 9) / 3), index % 3, activeColor));
+  }
 
   function handleStateChange(next: CubeState) {
     setCubeState(next);
@@ -215,7 +223,14 @@ export default function SolvePage() {
 
             {/* Input Component */}
             <div className="min-h-[300px]">
-              {inputTab === 'manual' && <ManualColorPicker state={cubeState} onChange={handleStateChange} />}
+              {inputTab === 'manual' && (
+                <ManualColorPicker
+                  state={cubeState}
+                  onChange={handleStateChange}
+                  activeColor={activeColor}
+                  onActiveColorChange={setActiveColor}
+                />
+              )}
               {inputTab === 'camera' && (
                 <WebcamScanner
                   onComplete={(state) => { handleStateChange(state); setInputTab('manual'); }}
@@ -378,19 +393,24 @@ export default function SolvePage() {
                 </div>
               </div>
             ) : (
-              // Empty State
-              <div className="flex flex-col items-center justify-center h-full gap-4 py-16 text-center animate-fade-in-up">
-                <div className="relative w-20 h-20 mb-2">
-                  <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full" />
-                  <svg className="relative w-full h-full text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                    <line x1="12" y1="22.08" x2="12" y2="12"/>
-                  </svg>
+              // Live preview of the cube being entered
+              <div className="flex flex-col h-full gap-3 animate-fade-in-up">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-fg/10 pb-4">
+                  <h2 className="text-lg font-bold text-fg">Your cube</h2>
+                  <span className="text-xs text-slate-500">
+                    {inputTab === 'manual' ? 'Drag to turn · click a sticker to paint it' : 'Drag to turn'}
+                  </span>
                 </div>
-                <h3 className="text-lg font-bold text-slate-300">Ready to Solve</h3>
-                <p className="text-sm text-slate-500 max-w-xs text-balance">
-                  Paint your cube state on the left, then click Solve to generate the optimal path.
+                <div className="h-[280px] sm:h-[360px]">
+                  <RubiksCube3D
+                    fill
+                    interactive
+                    state={cubeState}
+                    onStickerClick={inputTab === 'manual' ? paintSticker : undefined}
+                  />
+                </div>
+                <p className="text-sm text-slate-500 text-center text-balance">
+                  Check every side matches the cube in your hand, then hit Solve.
                 </p>
               </div>
             )}

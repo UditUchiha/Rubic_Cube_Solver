@@ -125,3 +125,5 @@ Light/dark via a `dark` class on `<html>`, set before first paint by the inline 
 - `slate-*` is remapped to CSS variables and **reversed in light mode** (`bg-slate-800` is a light panel there), so write neutral classes for the dark look and they adapt. Use `fg` (`text-fg`, `border-fg/10`) for "foreground"; keep `text-white` only on indigo fills, video and photo overlays.
 - Pale accent text needs a light pair: `text-red-600 dark:text-red-400`.
 - The cube net and 3D cube keep their black body in both themes, as a real cube does.
+
+3D extras on this branch: `HeroCube` loops a scramble and its inverse (no solver needed); `CubeField` is the home-page background (one `InstancedMesh`, kept out of the centre column); the solve page's right panel is a live, paintable `RubiksCube3D` (`onStickerClick`). All honour `prefers-reduced-motion` via `useReducedMotion`.

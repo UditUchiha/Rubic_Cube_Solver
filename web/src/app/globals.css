@@ -20,7 +20,6 @@
   --heading-to:  #475569;
   --accent-text: #4f46e5;
   --stat-from:   #4f46e5;
-  --aurora-opacity: 0.2;
   --skeleton-base: rgba(15,23,42,0.05);
   --skeleton-shine: rgba(15,23,42,0.1);
   --indigo:      #6366f1;
@@ -45,7 +44,6 @@
   --heading-to:  #94a3b8;
   --accent-text: #a5b4fc;
   --stat-from:   #a5b4fc;
-  --aurora-opacity: 0.35;
   --skeleton-base: rgba(255,255,255,0.04);
   --skeleton-shine: rgba(255,255,255,0.09);
   --indigo-glow: rgba(99,102,241,0.45);
@@ -72,20 +70,6 @@ body {
 }
 
 /* ── Keyframes ───────────────────────────────────────────────────────────── */
-@keyframes aurora-1 {
-  0%, 100% { transform: translate(0%, 0%)   scale(1);   }
-  33%       { transform: translate(8%, -6%)  scale(1.08); }
-  66%       { transform: translate(-5%, 5%)  scale(0.95); }
-}
-@keyframes aurora-2 {
-  0%, 100% { transform: translate(0%, 0%)   scale(1);   }
-  40%       { transform: translate(-10%, 4%) scale(1.12); }
-  70%       { transform: translate(6%, -8%)  scale(0.97); }
-}
-@keyframes aurora-3 {
-  0%, 100% { transform: translate(0%, 0%)   scale(1);   }
-  50%       { transform: translate(5%, 8%)   scale(1.05); }
-}
 
 @keyframes fade-in-up {
   from { opacity: 0; transform: translateY(24px); }
@@ -185,41 +169,6 @@ body {
     pointer-events: none;
   }
 
-  /* Aurora background blobs */
-  .aurora {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    pointer-events: none;
-  }
-  .aurora-blob {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: var(--aurora-opacity);
-  }
-  .aurora-blob-1 {
-    width: 55vw; height: 55vw;
-    max-width: 700px; max-height: 700px;
-    background: radial-gradient(circle, #4f46e5 0%, transparent 70%);
-    top: -15%; left: -10%;
-    animation: aurora-1 14s ease-in-out infinite;
-  }
-  .aurora-blob-2 {
-    width: 45vw; height: 45vw;
-    max-width: 560px; max-height: 560px;
-    background: radial-gradient(circle, #7c3aed 0%, transparent 70%);
-    top: 20%; right: -5%;
-    animation: aurora-2 18s ease-in-out infinite;
-  }
-  .aurora-blob-3 {
-    width: 40vw; height: 40vw;
-    max-width: 500px; max-height: 500px;
-    background: radial-gradient(circle, #0ea5e9 0%, transparent 70%);
-    bottom: -10%; left: 30%;
-    animation: aurora-3 22s ease-in-out infinite;
-  }
-
   /* Skeleton shimmer for loading */
   .skeleton {
     background: linear-gradient(90deg,
@@ -246,4 +195,14 @@ body {
 
   /* text-balance polyfill utility */
   .text-balance { text-wrap: balance; }
+}
+
+/* Respect the OS "reduce motion" setting for every CSS animation and transition. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

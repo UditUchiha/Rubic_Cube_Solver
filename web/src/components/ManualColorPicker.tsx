@@ -10,6 +10,9 @@ import clsx from 'clsx';
 interface Props {
   state: CubeState;
   onChange: (state: CubeState) => void;
+  /** Lifted to the parent so the 3D preview paints with the same colour. */
+  activeColor: Color;
+  onActiveColorChange: (color: Color) => void;
 }
 
 const PALETTE: Color[] = [0, 1, 2, 3, 4, 5];
@@ -28,8 +31,7 @@ const FACE_POSITIONS: [Face, number, number][] = [
 const MIN_CELL = 24;
 const MAX_CELL = 40;
 
-export default function ManualColorPicker({ state, onChange }: Props) {
-  const [activeColor, setActiveColor] = useState<Color>(2); // default Red
+export default function ManualColorPicker({ state, onChange, activeColor, onActiveColorChange }: Props) {
   const [cellSize, setCellSize] = useState(36);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -75,7 +77,7 @@ export default function ManualColorPicker({ state, onChange }: Props) {
           <button
             key={color}
             id={`color-swatch-${color}`}
-            onClick={() => setActiveColor(color)}
+            onClick={() => onActiveColorChange(color)}
             aria-label={`Select ${COLOR_NAMES[color]}`}
             aria-pressed={activeColor === color}
             className={clsx(

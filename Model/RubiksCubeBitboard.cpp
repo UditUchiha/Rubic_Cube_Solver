@@ -1,7 +1,3 @@
-//
-// Created by Lakshya Mittal on 26-12-2021.
-//
-
 #ifndef RUBIKS_CUBE_SOLVER_RUBIKSCUBEBITBOARD_H
 #define RUBIKS_CUBE_SOLVER_RUBIKSCUBEBITBOARD_H
 

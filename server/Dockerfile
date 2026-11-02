@@ -9,6 +9,7 @@ COPY CMakeLists.txt .
 COPY solver_api.cpp .
 COPY main.cpp .
 COPY generate_dbs.cpp .
+COPY test_two_phase.cpp .
 COPY Model/ Model/
 COPY PatternDatabases/ PatternDatabases/
 COPY Solver/ Solver/

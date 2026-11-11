@@ -8,7 +8,7 @@ import SolutionPlayer from '@/components/SolutionPlayer';
 import WebcamScanner from '@/components/WebcamScanner';
 import ImageUpload from '@/components/ImageUpload';
 import RubiksCube3D from '@/components/RubiksCube3D';
-import { Color, CubeState, Face, createSolvedState, serialize, setCell, validate, generateScramble } from '@/lib/cubeState';
+import { Color, CubeState, Face, applyMove, createSolvedState, serialize, setCell, validate, generateScramble } from '@/lib/cubeState';
 import { twoPhaseSolver, SolverStatus } from '@/lib/twoPhaseSolver';
 
 type SolveStatus = 'idle' | 'loading' | 'solved' | 'error';
@@ -89,6 +89,15 @@ export default function SolvePage() {
   function paintSticker(index: number) {
     if (index % 9 === 4) return;
     handleStateChange(setCell(cubeState, Math.floor(index / 9) as Face, Math.floor((index % 9) / 3), index % 3, activeColor));
+  }
+
+  // A layer turn dragged on the 3D preview: animate it, then apply it.
+  const [turning, setTurning] = useState<string | null>(null);
+  function finishTurn() {
+    if (!turning) return;
+    const next = applyMove(cubeState, turning);
+    setTurning(null);
+    handleStateChange(next);
   }
 
   function handleStateChange(next: CubeState) {
@@ -417,7 +426,7 @@ export default function SolvePage() {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-fg/10 pb-4">
                   <h2 className="text-lg font-bold text-fg">Your cube</h2>
                   <span className="text-xs text-slate-500">
-                    {inputTab === 'manual' ? 'Drag to turn · click a sticker to paint it' : 'Drag to turn'}
+                    {inputTab === 'manual' ? 'Drag a sticker to turn its layer · click to paint · drag outside to orbit' : 'Drag to orbit'}
                   </span>
                 </div>
                 <div className="h-[280px] sm:h-[360px]">
@@ -425,7 +434,11 @@ export default function SolvePage() {
                     fill
                     interactive
                     state={cubeState}
+                    move={turning}
+                    animDuration={250}
+                    onMoveComplete={finishTurn}
                     onStickerClick={inputTab === 'manual' ? paintSticker : undefined}
+                    onFaceTurn={inputTab === 'manual' ? (m) => { if (!turning) setTurning(m); } : undefined}
                   />
                 </div>
                 <p className="text-sm text-slate-500 text-center text-balance">

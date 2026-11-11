@@ -125,11 +125,13 @@ Uploaded photos are downscaled to 1600 px on the long side before sampling: iOS 
 
 Self-check for the scan logic: `cd web && npx --yes tsx scripts/scan-selfcheck.ts`.
 
-### Theming (ui-threejs branch)
+### Theming (ui/instrument-panel branch)
 
-Light/dark via a `dark` class on `<html>`, set before first paint by the inline script in `web/src/app/layout.tsx` (saved choice in `localStorage.theme`, else the OS setting) and flipped by `ThemeToggle`. Tokens live in `web/src/app/globals.css`.
-- `slate-*` is remapped to CSS variables and **reversed in light mode** (`bg-slate-800` is a light panel there), so write neutral classes for the dark look and they adapt. Use `fg` (`text-fg`, `border-fg/10`) for "foreground"; keep `text-white` only on indigo fills, video and photo overlays.
+The page is one instrument enclosure: enamel (light) or graphite (dark) ground, `.bezel` panels, thin `.rule-b` rules, `.key` buttons (`.key-primary` is an ink fill, `.key-down` a pressed key), Space Mono (`.mono`) for readouts, keys and headings, Space Grotesk for copy. Both fonts load through `next/font` in `web/src/app/layout.tsx`. The six sticker colours (`.colorbar`) are the only chroma; there is no accent colour, so do not reintroduce indigo, gradients, glass or all-caps labels.
+
+Light/dark via a `dark` class on `<html>`, set before first paint by the inline script in `layout.tsx` (saved choice in `localStorage.theme`, else the OS setting) and flipped by `ThemeToggle`. Tokens live in `web/src/app/globals.css`.
+- `slate-*` is still remapped to CSS variables and **reversed in light mode**, which is what keeps the scanners' neutral classes adapting. Use `fg` (`text-fg`, `border-fg/10`) for "foreground" and `var(--muted)` for secondary text; keep `text-white` only on video and photo overlays.
 - Pale accent text needs a light pair: `text-red-600 dark:text-red-400`.
 - The cube net and 3D cube keep their black body in both themes, as a real cube does.
 
-3D extras on this branch: `HeroCube` loops a scramble and its inverse (no solver needed); `CubeField` is the home-page background (one `InstancedMesh`, kept out of the centre column); the solve page's right panel is a live, paintable `RubiksCube3D` (`onStickerClick`). All honour `prefers-reduced-motion` via `useReducedMotion`.
+3D on this branch: `HeroPanel` loops a scramble and its inverse (no solver needed) and reads the notation out beside the cube; the solve page's right panel is a live `RubiksCube3D` that paints on click (`onStickerClick`) and turns a layer when a sticker is dragged (`onFaceTurn`, resolved in `web/src/lib/faceTurn.ts`). Orbit is the component's own turntable drag, not OrbitControls. All honour `prefers-reduced-motion` via `useReducedMotion`.

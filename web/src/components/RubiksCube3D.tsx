@@ -421,7 +421,7 @@ export default function RubiksCube3D({
       aria-label="3D Rubik's Cube"
     >
       <Canvas
-        camera={{ position: [3.6, 3.2, 5.2], fov: 42 }}
+        camera={{ position: [4.1, 3.6, 5.9], fov: 42 }}
         // Uncapped device pixel ratio renders 9x the pixels on a 3x phone
         // screen for no visible gain.
         dpr={[1, 2]}

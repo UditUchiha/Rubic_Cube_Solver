@@ -2,29 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Google Font ─────────────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 /* ── Design tokens ───────────────────────────────────────────────────────── */
-/* Light is the base; `.dark` on <html> (set by the script in layout.tsx)
-   overrides it. Colours used with Tailwind opacity modifiers are bare RGB
-   channels: `rgb(var(--fg) / 0.5)`. */
+/* The page is one instrument enclosure: an enamel ground, inset panels, thin
+   engraved rules and ink keys. Light is the base; `.dark` on <html> (set by the
+   script in layout.tsx) overrides it. Colours used with Tailwind opacity
+   modifiers are bare RGB channels: `rgb(var(--fg) / 0.5)`. The only chroma on
+   the page is the cube's own six sticker colours. */
 :root {
   color-scheme:  light;
-  --bg:          #f4f6fb;
-  --surface:     rgba(255,255,255,0.72);
-  --border:      rgba(15,23,42,0.1);
-  --fg:          15 23 42;
-  --grid-line:   rgba(15,23,42,0.6);
-  --heading-from:#0f172a;
-  --heading-to:  #475569;
-  --accent-text: #4f46e5;
-  --stat-from:   #4f46e5;
-  --skeleton-base: rgba(15,23,42,0.05);
-  --skeleton-shine: rgba(15,23,42,0.1);
-  --indigo:      #6366f1;
-  --indigo-glow: rgba(99,102,241,0.35);
-  --green-glow:  rgba(34,197,94,0.3);
+  --bg:          #e4e3dd;
+  --panel:       #f4f3ef;
+  --fg:          26 27 30;
+  --muted:       #65686d;
+  --rule:        rgba(26, 27, 30, 0.16);
+  --rule-strong: rgba(26, 27, 30, 0.5);
+  --key:         #ffffff;
+  --key-down:    #dcdbd5;
+  --on-ink:      #f4f3ef;
+  --skeleton-base:  rgba(26, 27, 30, 0.05);
+  --skeleton-shine: rgba(26, 27, 30, 0.1);
 
   /* Tailwind's slate scale, reversed: slate-800 is a light panel here. */
   --slate-50:  2 6 23;      --slate-100: 15 23 42;   --slate-200: 30 41 59;
@@ -35,19 +31,17 @@
 
 .dark {
   color-scheme:  dark;
-  --bg:          #05070f;
-  --surface:     rgba(255,255,255,0.045);
-  --border:      rgba(255,255,255,0.09);
-  --fg:          241 245 249;
-  --grid-line:   rgba(255,255,255,0.5);
-  --heading-from:#ffffff;
-  --heading-to:  #94a3b8;
-  --accent-text: #a5b4fc;
-  --stat-from:   #a5b4fc;
-  --skeleton-base: rgba(255,255,255,0.04);
-  --skeleton-shine: rgba(255,255,255,0.09);
-  --indigo-glow: rgba(99,102,241,0.45);
-  --green-glow:  rgba(34,197,94,0.4);
+  --bg:          #15171b;
+  --panel:       #1d2025;
+  --fg:          232 230 223;
+  --muted:       #8d9096;
+  --rule:        rgba(232, 230, 223, 0.14);
+  --rule-strong: rgba(232, 230, 223, 0.45);
+  --key:         #272a30;
+  --key-down:    #32363d;
+  --on-ink:      #15171b;
+  --skeleton-base:  rgba(232, 230, 223, 0.05);
+  --skeleton-shine: rgba(232, 230, 223, 0.1);
 
   --slate-50:  248 250 252; --slate-100: 241 245 249; --slate-200: 226 232 240;
   --slate-300: 203 213 225; --slate-400: 148 163 184; --slate-500: 100 116 139;
@@ -58,27 +52,19 @@
 /* ── Base ────────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
-
 body {
   color: rgb(var(--fg));
   background: var(--bg);
-  transition: background-color 0.3s ease, color 0.3s ease;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Keyframes ───────────────────────────────────────────────────────────── */
-
-@keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(24px); }
-  to   { opacity: 1; transform: translateY(0);    }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0px);  }
-  50%       { transform: translateY(-8px); }
+/* Sticker colours in order W G R B O Y, as six equal bars. */
+:root {
+  --colorbar: linear-gradient(90deg,
+    #ffffff 0 16.66%, #00d25a 16.66% 33.33%, #ff3232 33.33% 50%,
+    #3264ff 50% 66.66%, #ff8c00 66.66% 83.33%, #ffe500 83.33% 100%);
 }
 
 @keyframes shimmer {
@@ -86,88 +72,44 @@ body {
   100% { background-position:  200% center; }
 }
 
-@keyframes pulse-ring {
-  0%   { box-shadow: 0 0 0 0   var(--indigo-glow); }
-  70%  { box-shadow: 0 0 0 8px transparent;         }
-  100% { box-shadow: 0 0 0 0   transparent;         }
-}
-
-@keyframes spin-slow {
-  from { transform: rotate(0deg);   }
-  to   { transform: rotate(360deg); }
-}
-
-@keyframes scale-in {
-  from { opacity: 0; transform: scale(0.9); }
-  to   { opacity: 1; transform: scale(1);   }
-}
-
-@keyframes progress-slide {
-  from { transform: translateX(-100%); }
-  to   { transform: translateX(100%);  }
-}
-
 /* ── Utility classes ─────────────────────────────────────────────────────── */
 @layer utilities {
-  /* Glassmorphism card */
-  .glass {
-    background: var(--surface);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--border);
+  .mono { font-family: var(--font-mono), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  /* An inset panel of the enclosure. */
+  .bezel {
+    background: var(--panel);
+    border: 1px solid var(--rule-strong);
+    border-radius: 6px;
+  }
+  .rule-b { border-bottom: 1px solid var(--rule); }
+  .rule-t { border-top: 1px solid var(--rule); }
+
+  /* Keys: the enclosure's buttons. Primary is an ink fill. */
+  .key {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    background: var(--key);
+    color: rgb(var(--fg));
+    border: 1px solid var(--rule-strong);
+    border-radius: 3px;
+    transition: background-color 120ms, transform 80ms;
+  }
+  .key:hover:not(:disabled) { background: var(--key-down); }
+  .key:active:not(:disabled) { transform: translateY(1px); }
+  .key:disabled { opacity: 0.4; cursor: not-allowed; }
+  .key-primary {
+    background: rgb(var(--fg));
+    color: var(--on-ink);
+    border-color: rgb(var(--fg));
+  }
+  .key-primary:hover:not(:disabled) { background: rgb(var(--fg) / 0.85); }
+  .key-down { background: rgb(var(--fg)); color: var(--on-ink); border-color: rgb(var(--fg)); }
+  .key:focus-visible, .key-primary:focus-visible {
+    outline: 2px solid rgb(var(--fg));
+    outline-offset: 2px;
   }
 
-  /* Gradient text */
-  .gradient-text {
-    background: linear-gradient(135deg, var(--heading-from) 0%, var(--heading-to) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-  .gradient-text-indigo {
-    background: linear-gradient(135deg, var(--stat-from) 0%, #818cf8 50%, #6366f1 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  /* Glow shadows */
-  .glow-indigo {
-    box-shadow: 0 0 20px var(--indigo-glow), 0 0 60px rgba(99,102,241,0.15);
-  }
-  .glow-green {
-    box-shadow: 0 0 20px var(--green-glow), 0 0 60px rgba(34,197,94,0.1);
-  }
-
-  /* Entrance animations */
-  .animate-fade-in-up      { animation: fade-in-up 0.6s ease both; }
-  .animate-fade-in-up-d1   { animation: fade-in-up 0.6s ease 0.1s both; }
-  .animate-fade-in-up-d2   { animation: fade-in-up 0.6s ease 0.2s both; }
-  .animate-fade-in-up-d3   { animation: fade-in-up 0.6s ease 0.35s both; }
-  .animate-fade-in-up-d4   { animation: fade-in-up 0.6s ease 0.5s both; }
-
-  .animate-float           { animation: float 4s ease-in-out infinite; }
-  .animate-scale-in        { animation: scale-in 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
-
-  /* Shimmer button effect */
-  .btn-shimmer {
-    position: relative;
-    overflow: hidden;
-  }
-  .btn-shimmer::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      105deg,
-      transparent 40%,
-      rgba(255,255,255,0.18) 50%,
-      transparent 60%
-    );
-    background-size: 200% auto;
-    animation: shimmer 2.5s linear infinite;
-    pointer-events: none;
-  }
+  .colorbar { background: var(--colorbar); }
 
   /* Skeleton shimmer for loading */
   .skeleton {
@@ -193,7 +135,6 @@ body {
     box-shadow: 0 0 0 1px rgb(var(--fg) / 0.25);
   }
 
-  /* text-balance polyfill utility */
   .text-balance { text-wrap: balance; }
 }
 

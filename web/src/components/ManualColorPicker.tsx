@@ -72,7 +72,7 @@ export default function ManualColorPicker({ state, onChange, activeColor, onActi
 
       {/* ── Color palette ─────────────────────────────────────────────── */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1">Paint:</span>
+        <span className="mono text-xs w-[8ch]" style={{ color: 'var(--muted)' }}>paint</span>
         {PALETTE.map((color) => (
           <button
             key={color}
@@ -81,39 +81,23 @@ export default function ManualColorPicker({ state, onChange, activeColor, onActi
             aria-label={`Select ${COLOR_NAMES[color]}`}
             aria-pressed={activeColor === color}
             className={clsx(
-              'rounded-full border-2 transition-all duration-200 flex-shrink-0',
-              activeColor === color
-                ? 'scale-125 border-fg shadow-lg'
-                : 'border-slate-600 hover:border-slate-300 hover:scale-110'
+              'rounded-[3px] flex-shrink-0 transition-transform focus-visible:outline-none',
+              activeColor === color ? 'scale-110' : 'hover:scale-105'
             )}
             style={{
-              width: 28, height: 28,
+              width: 26, height: 26,
               backgroundColor: COLOR_HEX[color],
+              // The pressed sticker gets the ink ring; the rest a sticker edge.
               boxShadow: activeColor === color
-                ? `0 0 0 3px rgba(255,255,255,0.15), 0 0 12px ${COLOR_HEX[color]}80`
-                : undefined,
+                ? '0 0 0 2px var(--panel), 0 0 0 4px rgb(var(--fg))'
+                : 'inset 0 0 0 1px rgba(0,0,0,0.3)',
             }}
             title={COLOR_NAMES[color]}
           />
         ))}
+        <span className="mono text-xs ml-1 min-w-[6ch]">{COLOR_NAMES[activeColor].toLowerCase()}</span>
 
-        {/* Active color name label */}
-        <span className="ml-1 text-xs text-slate-300 font-medium min-w-[48px]">
-          {COLOR_NAMES[activeColor]}
-        </span>
-
-        {/* Reset button */}
-        <button
-          id="reset-cube-btn"
-          onClick={handleReset}
-          className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-            text-slate-400 border border-slate-700 hover:border-slate-500 hover:text-fg
-            transition-all duration-200 active:scale-95"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden>
-            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-            <path d="M3 3v5h5"/>
-          </svg>
+        <button id="reset-cube-btn" onClick={handleReset} className="key ml-auto px-3 py-1.5 text-xs">
           Reset
         </button>
       </div>
@@ -135,10 +119,10 @@ export default function ManualColorPicker({ state, onChange, activeColor, onActi
             >
               {/* Face label */}
               <div
-                className="text-center font-medium text-slate-500 mb-1 select-none"
-                style={{ fontSize: Math.max(9, cellSize * 0.28), lineHeight: '1.2' }}
+                className="mono text-center mb-1 select-none"
+                style={{ fontSize: Math.max(9, cellSize * 0.28), lineHeight: '1.2', color: 'var(--muted)' }}
               >
-                {FACE_NAMES[face]}
+                {FACE_NAMES[face].toLowerCase()}
               </div>
 
               {/* 3×3 grid of cells */}
@@ -190,8 +174,8 @@ export default function ManualColorPicker({ state, onChange, activeColor, onActi
       </div>
 
       {/* ── Hint ──────────────────────────────────────────────────────────── */}
-      <p className="text-[11px] text-slate-600 leading-relaxed">
-        Select a color above, then click any sticker to paint it. Center cells are fixed.
+      <p className="text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
+        Pick a colour, then click any sticker on the net or the 3D cube to paint it. Centres are fixed.
       </p>
     </div>
   );

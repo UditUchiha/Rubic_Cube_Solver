@@ -301,7 +301,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
         // Auto-capture progress along the bottom edge while the colours hold still.
         if (autoCapture && !preview && live.colors && live.wrong === null && steady.sig !== steady.captured) {
           const progress = Math.min(1, (now - steady.since) / STEADY_MS);
-          ctx.fillStyle = 'rgba(99,102,241,0.9)'; // indigo-500, the scanner's accent
+          ctx.fillStyle = 'rgba(255,255,255,0.9)'; // white reads on any video frame
           ctx.fillRect(gridX, gridY + gridSize + 6, gridSize * progress, 4);
         }
       }
@@ -374,7 +374,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
         <div className="flex gap-2">
           <button
             onClick={() => { setCameraError(null); setAttempt((a) => a + 1); }}
-            className="px-4 py-2 text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-semibold"
+            className="px-4 py-2 key key-primary text-sm font-semibold"
           >
             Try again
           </button>
@@ -465,7 +465,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
           <>
             <button
               onClick={handleCapture}
-              className="flex-1 py-2.5 text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold"
+              className="flex-1 py-2.5 key key-primary text-sm font-semibold"
             >
               Capture Face
             </button>
@@ -483,7 +483,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
             </button>
             <button
               onClick={handleUseFace}
-              className="flex-1 py-2.5 text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl text-sm font-semibold"
+              className="flex-1 py-2.5 key key-primary text-sm font-semibold"
             >
               {isLastFace ? 'Finish' : 'Use This Face →'}
             </button>
@@ -500,7 +500,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
             steadyRef.current.since = performance.now();
             setAutoCapture(e.target.checked);
           }}
-          className="accent-indigo-500"
+          className="accent-[rgb(var(--fg))]"
         />
         Auto-capture when the cube is held still
       </label>
@@ -514,7 +514,7 @@ export default function WebcamScanner({ onComplete, onCancel }: Props) {
             title={`${FACE_NAMES[i]} face`}
             className={clsx(
               'w-2.5 h-2.5 rounded-full transition-colors',
-              scanned[i] ? 'bg-green-500' : i === faceIdx ? 'bg-indigo-400' : 'bg-slate-600'
+              scanned[i] ? 'bg-green-500' : i === faceIdx ? 'bg-fg' : 'bg-slate-600'
             )}
           />
         ))}

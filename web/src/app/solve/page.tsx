@@ -24,11 +24,33 @@ const MAX_SHUFFLE_DEPTH = 25;
 const SLOW_SHUFFLE_DEPTH = 13;
 
 const LOADING_MESSAGES = [
-  'Connecting to solver...',
-  'Waking up server...',
-  'Loading pattern database...',
-  'Solving your cube...',
+  'connecting to solver',
+  'waking up server',
+  'loading pattern database',
+  'solving',
 ];
+
+const formatMs = (ms: number) => (ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(1)} s`);
+
+/** One engraved row of the readout table. */
+function Readout({ label, children, last }: { label: string; children: React.ReactNode; last?: boolean }) {
+  return (
+    <div className={`grid grid-cols-[8ch_1fr] gap-3 px-4 py-2.5 sm:px-5 ${last ? '' : 'rule-b'}`}>
+      <dt style={{ color: 'var(--muted)' }}>{label}</dt>
+      <dd className="text-fg min-w-0 break-words">{children}</dd>
+    </div>
+  );
+}
+
+/** A labelled control row inside the input panel. */
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <span className="mono text-xs w-[8ch]" style={{ color: 'var(--muted)' }}>{label}</span>
+      {children}
+    </div>
+  );
+}
 
 export default function SolvePage() {
   const [cubeState, setCubeState] = useState<CubeState>(createSolvedState);
@@ -175,279 +197,203 @@ export default function SolvePage() {
       }
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;
-      setErrorMsg('Network error — cannot reach the solver server.');
+      setErrorMsg('Cannot reach the solver server. Check your connection, or use Fast mode.');
       setSolveStatus('error');
     }
   }
+
+  const validity = validationErrors.length > 0 ? `invalid, ${validationErrors.length} ${validationErrors.length === 1 ? 'problem' : 'problems'}` : 'valid';
+  const tables = solverStatus === 'ready' ? 'ready' : solverStatus === 'unavailable' ? 'unavailable' : 'building';
+  const busy = solveStatus === 'loading';
 
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
       <h1 className="sr-only">Solve your cube</h1>
 
-      {/* ── Main Content ────────────────────────────────────────────────── */}
-      <div className="flex-1 max-w-7xl mx-auto w-full px-3 py-4 sm:px-6 sm:py-8 flex flex-col lg:flex-row gap-4 sm:gap-8 relative z-10">
-        
-        {/* Left Col: Input */}
-        <div className="flex-1 flex flex-col gap-4 min-w-[320px]">
-          <div className="glass rounded-2xl p-4 sm:p-6 lg:p-8 flex flex-col gap-5 sm:gap-6 shadow-xl shadow-black/20">
-            
-            {/* Tab bar (wrapping gracefully on narrow screens) */}
-            <div className="flex flex-wrap items-center gap-2">
-              <SegmentedControl
-                label="Input method"
-                value={inputTab}
-                onChange={setInputTab}
-                options={[
-                  { value: 'manual', label: 'Manual' },
-                  { value: 'camera', label: 'Camera' },
-                  { value: 'upload', label: 'Upload' },
-                ]}
-              />
-              
-              {inputTab === 'manual' && (
-                <div className="ml-auto flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 bg-slate-900/50 rounded-lg border border-fg/10 px-2 py-1">
-                    <label htmlFor="shuffle-depth" className="text-xs text-slate-500 whitespace-nowrap">Depth</label>
-                    <input
-                      id="shuffle-depth"
-                      type="number"
-                      min={1}
-                      max={MAX_SHUFFLE_DEPTH}
-                      value={shuffleDepth}
-                      onChange={(e) =>
-                        setShuffleDepth(
-                          Math.max(1, Math.min(MAX_SHUFFLE_DEPTH, Number(e.target.value) || 1))
-                        )
-                      }
-                      disabled={solveStatus === 'loading'}
-                      className="w-10 bg-transparent text-center text-sm font-semibold text-slate-300 outline-none
-                        [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                  </div>
-                  <button
-                    onClick={handleShuffle}
-                    disabled={solveStatus === 'loading'}
-                    title={
-                      shuffleDepth >= SLOW_SHUFFLE_DEPTH
-                        ? `Depth ${shuffleDepth} can take 10-30s to solve`
-                        : `Scramble ${shuffleDepth} moves`
-                    }
-                    className="flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold
-                      bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-colors border border-fg/10"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
-                    Shuffle
-                  </button>
-                </div>
-              )}
-            </div>
+      <div className="flex-1 max-w-6xl mx-auto w-full px-3 py-4 sm:px-6 sm:py-8 grid gap-4 sm:gap-6 lg:grid-cols-2 items-start">
 
-            {/* Input Component */}
-            <div className="min-h-[300px]">
-              {inputTab === 'manual' && (
-                <ManualColorPicker
-                  state={cubeState}
-                  onChange={handleStateChange}
-                  activeColor={activeColor}
-                  onActiveColorChange={setActiveColor}
-                />
-              )}
-              {inputTab === 'camera' && (
-                <WebcamScanner onComplete={handleScanned} onCancel={() => setInputTab('manual')} />
-              )}
-              {inputTab === 'upload' && <ImageUpload onComplete={handleScanned} />}
-            </div>
+        {/* ── Input panel ─────────────────────────────────────────────────── */}
+        {/* min-w-0: otherwise the grid item takes the cube net's intrinsic width
+            and the net measures itself against that, never shrinking on phones. */}
+        <section className="bezel flex flex-col min-w-0" aria-label="Cube input">
+          <div className="rule-b px-4 py-3 sm:px-5 flex flex-wrap items-center gap-3">
+            <span className="mono text-xs w-[8ch]" style={{ color: 'var(--muted)' }}>input</span>
+            <SegmentedControl
+              label="Input method"
+              value={inputTab}
+              onChange={setInputTab}
+              options={[
+                { value: 'manual', label: 'paint' },
+                { value: 'camera', label: 'camera' },
+                { value: 'upload', label: 'photos' },
+              ]}
+            />
+          </div>
 
-            {/* Scan auto-corrections */}
-            {inputTab === 'manual' && scanNotes.length > 0 && (
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 sm:p-4 animate-fade-in-up">
-                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-semibold text-sm mb-2">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                  Scan auto-corrected
-                </div>
-                <ul className="text-xs sm:text-sm text-amber-800/80 dark:text-amber-300/80 flex flex-col gap-1.5 ml-6 list-disc marker:text-amber-500/50">
-                  {scanNotes.map((n, i) => <li key={i}>{n}</li>)}
-                </ul>
-              </div>
-            )}
-
-            {/* Validation Errors */}
-            {inputTab === 'manual' && validationErrors.length > 0 && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 sm:p-4 animate-fade-in-up">
-                <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-semibold text-sm mb-2">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                  Invalid Cube State
-                </div>
-                <ul className="text-xs sm:text-sm text-red-700/80 dark:text-red-300/80 flex flex-col gap-1.5 ml-6 list-disc marker:text-red-500/50">
-                  {validationErrors.map((e, i) => <li key={i}>{e}</li>)}
-                </ul>
-              </div>
-            )}
-
-            {/* Solve Actions */}
+          <div className="px-4 py-4 sm:px-5 sm:py-5 min-h-[300px]">
             {inputTab === 'manual' && (
-              <div className="flex flex-col gap-3 mt-auto pt-2 border-t border-fg/10">
+              <ManualColorPicker
+                state={cubeState}
+                onChange={handleStateChange}
+                activeColor={activeColor}
+                onActiveColorChange={setActiveColor}
+              />
+            )}
+            {inputTab === 'camera' && (
+              <WebcamScanner onComplete={handleScanned} onCancel={() => setInputTab('manual')} />
+            )}
+            {inputTab === 'upload' && <ImageUpload onComplete={handleScanned} />}
+          </div>
 
-                {/* ── Fast vs optimal ───────────────────────────────────── */}
-                <div className="flex flex-col gap-1.5">
-                  <SegmentedControl
-                    label="Solver"
-                    stretch
-                    value={mode}
-                    onChange={setMode}
-                    options={[
-                      { value: 'fast', label: <>Fast<span className="hidden sm:inline font-normal opacity-70"> · ~21 moves, instant</span></> },
-                      { value: 'optimal', label: <>Optimal<span className="hidden sm:inline font-normal opacity-70"> · fewest moves, slow</span></> },
-                    ]}
-                  />
+          {inputTab === 'manual' && scanNotes.length > 0 && (
+            <div className="rule-t px-4 py-3 sm:px-5 text-sm">
+              <p className="mono text-xs mb-1.5 text-amber-700 dark:text-amber-400">scan corrected</p>
+              <ul className="flex flex-col gap-1 list-disc ml-5">
+                {scanNotes.map((n, i) => <li key={i}>{n}</li>)}
+              </ul>
+            </div>
+          )}
 
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    {mode === 'fast' ? (
-                      solverStatus === 'ready' ? (
-                        <>Two-phase solver, running in your browser. No server, no waiting.</>
-                      ) : solverStatus === 'unavailable' ? (
-                        <span className="text-amber-600/80 dark:text-amber-400/80">
-                          Your browser cannot run the in-page solver. Switch to Optimal.
-                        </span>
-                      ) : (
-                        <>Preparing the in-browser solver…</>
-                      )
-                    ) : (
-                      <>Shortest possible solution from the C++ IDA* server. Cost rises steeply with
-                      scramble depth — past {SLOW_SHUFFLE_DEPTH} moves it may time out.</>
-                    )}
-                  </p>
-                </div>
+          {inputTab === 'manual' && validationErrors.length > 0 && (
+            <div className="rule-t px-4 py-3 sm:px-5 text-sm" role="alert">
+              <p className="mono text-xs mb-1.5 text-red-600 dark:text-red-400">this cube cannot exist</p>
+              <ul className="flex flex-col gap-1 list-disc ml-5">
+                {validationErrors.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            </div>
+          )}
 
-                <button
-                  onClick={handleSolve}
-                  disabled={
-                    solveStatus === 'loading' ||
-                    (mode === 'fast' && solverStatus !== 'ready')
+          {inputTab === 'manual' && (
+            <div className="rule-t px-4 py-4 sm:px-5 flex flex-col gap-3">
+              <Row label="scramble">
+                <label htmlFor="shuffle-depth" className="sr-only">Scramble depth</label>
+                <input
+                  id="shuffle-depth"
+                  type="number"
+                  min={1}
+                  max={MAX_SHUFFLE_DEPTH}
+                  value={shuffleDepth}
+                  onChange={(e) =>
+                    setShuffleDepth(Math.max(1, Math.min(MAX_SHUFFLE_DEPTH, Number(e.target.value) || 1)))
                   }
-                  className="btn-shimmer relative w-full py-3.5 sm:py-4 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold text-white text-base sm:text-lg transition-all 
-                    shadow-[0_0_20px_rgba(99,102,241,0.3)] hover:shadow-[0_0_25px_rgba(99,102,241,0.5)] active:scale-[0.98] disabled:opacity-70 disabled:pointer-events-none overflow-hidden"
+                  disabled={busy}
+                  className="key w-14 py-1.5 text-center text-sm
+                    [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                />
+                <span className="mono text-xs" style={{ color: 'var(--muted)' }}>moves</span>
+                <button
+                  onClick={handleShuffle}
+                  disabled={busy}
+                  title={shuffleDepth >= SLOW_SHUFFLE_DEPTH ? `Depth ${shuffleDepth} can take 10-30 s in Optimal mode` : `Scramble ${shuffleDepth} moves`}
+                  className="key px-3 py-1.5 text-xs sm:text-sm"
                 >
-                  {solveStatus === 'loading' ? (
-                    <span className="flex items-center justify-center gap-3">
-                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      {mode === 'fast' ? 'Solving…' : LOADING_MESSAGES[loadingMsgIdx]}
-                    </span>
-                  ) : mode === 'fast' && solverStatus !== 'ready' ? (
-                    <span className="flex items-center justify-center gap-3">
-                      <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Preparing solver…
-                    </span>
-                  ) : (
-                    'Solve Cube'
-                  )}
+                  Scramble
                 </button>
+              </Row>
 
-                {solveStatus === 'loading' && mode === 'optimal' && (
-                  <button
-                    onClick={handleCancel}
-                    className="w-full py-2.5 text-sm font-medium text-slate-400 hover:text-fg bg-slate-800/50 hover:bg-slate-700/50 rounded-lg transition-colors border border-transparent hover:border-slate-600"
-                  >
-                    Cancel Request
-                  </button>
-                )}
+              <Row label="solver">
+                <SegmentedControl
+                  label="Solver"
+                  value={mode}
+                  onChange={setMode}
+                  disabled={busy}
+                  options={[
+                    { value: 'fast', label: 'fast' },
+                    { value: 'optimal', label: 'optimal' },
+                  ]}
+                />
+                <span className="text-xs" style={{ color: 'var(--muted)' }}>
+                  {mode === 'fast'
+                    ? 'about 21 moves, in your browser'
+                    : `fewest moves, on the server; slow past ${SLOW_SHUFFLE_DEPTH} scramble moves`}
+                </span>
+              </Row>
 
-                {slowLoad && mode === 'optimal' && (
-                  <p className="text-xs text-center text-amber-600/80 dark:text-amber-400/80 animate-fade-in-up">
-                    <svg className="inline mr-1 -mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                    Server is waking up. This may take up to 45s on the first request.
-                  </p>
-                )}
-
-                {solveStatus === 'error' && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-600 dark:text-red-400 font-medium text-center animate-fade-in-up">
-                    {errorMsg}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Col: Solution Player */}
-        <div className="flex-1 flex flex-col gap-4 min-w-[320px]">
-          <div className="glass rounded-2xl p-4 sm:p-6 lg:p-8 h-full flex flex-col shadow-xl shadow-black/20">
-            {solveStatus === 'solved' ? (
-              <div className="flex flex-col gap-4 h-full animate-fade-in-up">
-                <div className="flex items-center justify-between border-b border-fg/10 pb-4">
-                  <h2 className="text-lg font-bold text-fg flex items-center gap-2">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--indigo)" strokeWidth="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                    Solution Found
-                  </h2>
-                  <span className="text-xs font-semibold px-2.5 py-1 bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 rounded-md border border-indigo-500/20">
-                    {solution.length === 0 ? '0 moves' : `${solution.length} moves`}
-                    {lastSolveMs !== null && (
-                      <span className="ml-1.5 font-normal opacity-70">
-                        {lastSolveMs < 1000
-                          ? `${Math.round(lastSolveMs)} ms`
-                          : `${(lastSolveMs / 1000).toFixed(1)} s`}
-                      </span>
-                    )}
-                  </span>
-                </div>
-                
-                <div className="flex-1 pt-2">
-                  {solution.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center gap-3 text-center py-12">
-                      <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-2 glow-green">
-                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
-                      </div>
-                      <h3 className="text-xl font-bold text-green-600 dark:text-green-400">Cube is already solved!</h3>
-                      <p className="text-sm text-slate-400">Mix it up and try again.</p>
-                    </div>
-                  ) : (
-                    <SolutionPlayer initialState={cubeState} moves={solution} />
-                  )}
-                </div>
-              </div>
-            ) : solveStatus === 'loading' ? (
-              // Loading Skeleton
-              <div className="flex flex-col gap-6 h-full p-4 animate-fade-in-up">
-                <div className="h-8 w-40 rounded-lg skeleton" />
-                <div className="flex-1 flex flex-col items-center justify-center gap-6">
-                  <div className="w-48 h-48 rounded-xl skeleton opacity-50" />
-                  <div className="w-full max-w-sm h-3 rounded-full skeleton opacity-50" />
-                  <div className="flex gap-3">
-                    <div className="w-12 h-10 rounded-lg skeleton opacity-50" />
-                    <div className="w-12 h-10 rounded-lg skeleton opacity-50" />
-                    <div className="w-24 h-10 rounded-lg skeleton opacity-50" />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              // Live preview of the cube being entered
-              <div className="flex flex-col h-full gap-3 animate-fade-in-up">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-fg/10 pb-4">
-                  <h2 className="text-lg font-bold text-fg">Your cube</h2>
-                  <span className="text-xs text-slate-500">
-                    {inputTab === 'manual' ? 'Drag a sticker to turn its layer · click to paint · drag outside to orbit' : 'Drag to orbit'}
-                  </span>
-                </div>
-                <div className="h-[280px] sm:h-[360px]">
-                  <RubiksCube3D
-                    fill
-                    interactive
-                    state={cubeState}
-                    move={turning}
-                    animDuration={250}
-                    onMoveComplete={finishTurn}
-                    onStickerClick={inputTab === 'manual' ? paintSticker : undefined}
-                    onFaceTurn={inputTab === 'manual' ? (m) => { if (!turning) setTurning(m); } : undefined}
-                  />
-                </div>
-                <p className="text-sm text-slate-500 text-center text-balance">
-                  Check every side matches the cube in your hand, then hit Solve.
+              {mode === 'fast' && solverStatus === 'unavailable' && (
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  Your browser cannot run the in-page solver. Switch to Optimal.
                 </p>
+              )}
+
+              <button
+                onClick={handleSolve}
+                disabled={busy || (mode === 'fast' && solverStatus !== 'ready')}
+                className="key key-primary w-full py-3 text-sm sm:text-base mt-1"
+              >
+                {busy
+                  ? (mode === 'fast' ? 'solving' : LOADING_MESSAGES[loadingMsgIdx])
+                  : mode === 'fast' && solverStatus !== 'ready'
+                  ? 'preparing solver'
+                  : 'Solve'}
+              </button>
+
+              {busy && mode === 'optimal' && (
+                <button onClick={handleCancel} className="key w-full py-2 text-sm">
+                  Cancel
+                </button>
+              )}
+
+              {slowLoad && mode === 'optimal' && (
+                <p className="text-xs text-amber-700 dark:text-amber-400">
+                  The server is waking up. The first request can take up to 45 s.
+                </p>
+              )}
+
+              {solveStatus === 'error' && (
+                <p className="text-sm text-red-600 dark:text-red-400" role="alert">{errorMsg}</p>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* ── Cube and readouts ───────────────────────────────────────────── */}
+        <section className="bezel flex flex-col min-w-0" aria-label="Cube and solution">
+          {solveStatus === 'solved' ? (
+            <>
+              <div className="rule-b px-4 py-3 sm:px-5 mono text-xs flex items-center gap-4">
+                <span style={{ color: 'var(--muted)' }}>solution</span>
+                {solution.length === 0 && <span>already solved, nothing to do</span>}
               </div>
-            )}
-          </div>
-        </div>
+              <div className="px-4 py-4 sm:px-5 sm:py-5">
+                {solution.length === 0 ? (
+                  <div className="h-[280px] sm:h-[360px]">
+                    <RubiksCube3D fill interactive state={cubeState} />
+                  </div>
+                ) : (
+                  <SolutionPlayer initialState={cubeState} moves={solution} />
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="rule-b px-4 py-3 sm:px-5 mono text-xs flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span style={{ color: 'var(--muted)' }}>your cube</span>
+                <span>{inputTab === 'manual' ? 'drag a sticker to turn its layer, click to paint' : 'drag to orbit'}</span>
+              </div>
+              <div className={`h-[280px] sm:h-[360px] ${busy ? 'opacity-50' : ''}`}>
+                <RubiksCube3D
+                  fill
+                  interactive
+                  state={cubeState}
+                  move={turning}
+                  animDuration={250}
+                  onMoveComplete={finishTurn}
+                  onStickerClick={inputTab === 'manual' && !busy ? paintSticker : undefined}
+                  onFaceTurn={inputTab === 'manual' && !busy ? (m) => { if (!turning) setTurning(m); } : undefined}
+                />
+              </div>
+            </>
+          )}
+
+          <dl className="rule-t mono text-sm">
+            <Readout label="mode">{mode === 'fast' ? 'fast, two-phase in a Web Worker' : "optimal, Korf's IDA* in C++"}</Readout>
+            <Readout label="tables">{tables}</Readout>
+            <Readout label="cube">{validity}</Readout>
+            <Readout label="moves">{solveStatus === 'solved' ? solution.length : busy ? LOADING_MESSAGES[mode === 'fast' ? 3 : loadingMsgIdx] : '—'}</Readout>
+            <Readout label="time" last>{lastSolveMs !== null ? formatMs(lastSolveMs) : '—'}</Readout>
+          </dl>
+        </section>
       </div>
     </div>
   );

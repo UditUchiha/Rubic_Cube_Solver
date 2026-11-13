@@ -16,15 +16,12 @@ interface Props<T> {
   disabled?: boolean;
 }
 
+/** A row of keys where exactly one is pressed. */
 export default function SegmentedControl<T extends string | number>({
   options, value, onChange, label, stretch, disabled,
 }: Props<T>) {
   return (
-    <div
-      role="group"
-      aria-label={label}
-      className={clsx('flex bg-slate-900/50 p-1 rounded-xl border border-fg/10', stretch ? 'w-full' : 'w-fit')}
-    >
+    <div role="group" aria-label={label} className={clsx('flex gap-1', stretch ? 'w-full' : 'w-fit')}>
       {options.map((o) => (
         <button
           key={o.value}
@@ -33,12 +30,9 @@ export default function SegmentedControl<T extends string | number>({
           disabled={disabled}
           onClick={() => onChange(o.value)}
           className={clsx(
-            'px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed',
+            'key px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm',
             stretch && 'flex-1',
-            o.value === value
-              ? 'bg-indigo-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-fg hover:bg-fg/5'
+            o.value === value && 'key-down'
           )}
         >
           {o.label}

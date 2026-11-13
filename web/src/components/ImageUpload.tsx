@@ -98,7 +98,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 /* Opens the rear camera on phones. Hidden where a mouse is used: desktop ignores `capture` and shows a file picker. */
 function TakePhoto({ onChange, className }: { onChange: React.ChangeEventHandler<HTMLInputElement>; className: string }) {
   return (
-    <label className={clsx(className, 'text-center text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-semibold cursor-pointer transition-colors [@media(pointer:fine)]:hidden')}>
+    <label className={clsx(className, 'text-center key key-primary text-sm font-semibold cursor-pointer transition-colors [@media(pointer:fine)]:hidden')}>
       Take photo
       <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onChange} />
     </label>
@@ -270,7 +270,7 @@ export default function ImageUpload({ onComplete }: Props) {
             className={clsx(
               'px-2.5 py-1 rounded text-xs font-medium border transition-colors flex items-center gap-1',
               activeFace === i
-                ? 'bg-indigo-600 border-indigo-400 text-white'
+                ? 'key-down'
                 : faces[i]
                 ? 'bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300'
                 : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-slate-400'
@@ -374,7 +374,7 @@ export default function ImageUpload({ onComplete }: Props) {
               max={Math.round(Math.min(currentFace.w, currentFace.h))}
               value={currentFace.gridSize}
               onChange={(e) => updateGrid(activeFace, { gridSize: Number(e.target.value) })}
-              className="flex-1 accent-indigo-500"
+              className="flex-1 accent-[rgb(var(--fg))]"
             />
           </label>
 
@@ -403,7 +403,7 @@ export default function ImageUpload({ onComplete }: Props) {
       {fileError && (
         <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-sm text-red-700 dark:text-red-300">{fileError}</div>
       )}
-      {matchNote && <p className="text-xs text-indigo-700 dark:text-indigo-300" role="status">{matchNote}</p>}
+      {matchNote && <p className="text-xs text-fg" role="status">{matchNote}</p>}
 
       {currentFace && (
         <div className="flex flex-col gap-2">
@@ -428,7 +428,7 @@ export default function ImageUpload({ onComplete }: Props) {
       <button
         onClick={handleFinish}
         disabled={!allUploaded}
-        className="w-full py-3 text-white bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl font-semibold text-sm transition-colors"
+        className="w-full py-3 key key-primary disabled:cursor-not-allowed rounded-xl font-semibold text-sm transition-colors"
       >
         {allUploaded ? 'Use These Colours' : `Upload all 6 faces (${faces.filter(Boolean).length}/6 done)`}
       </button>

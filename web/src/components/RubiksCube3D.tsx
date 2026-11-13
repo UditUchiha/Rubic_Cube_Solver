@@ -2,9 +2,9 @@
 
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { CubeState, COLOR_HEX, createSolvedState, cubeSize } from '@/lib/cubeState';
+import { resolveFaceTurn, Vec3 } from '@/lib/faceTurn';
 
 interface Props {
   state?: CubeState;
@@ -22,10 +22,28 @@ interface Props {
   onMoveComplete?: () => void;
   /** Called with the 0-53 state index of a clicked sticker. Drags don't count. */
   onStickerClick?: (index: number) => void;
+  /** Called with the move a drag on a sticker asks for ("R", "U'"...). The caller animates it via `move`. */
+  onFaceTurn?: (move: string) => void;
 }
 
 // Pointer travel in px under which a press counts as a click, not a drag to orbit.
 const CLICK_SLOP = 5;
+// Pointer travel in px before a drag on a sticker counts as a face turn.
+const FACE_TURN_MIN_PX = 18;
+const ORBIT_RAD_PER_PX = 0.008;
+const ORBIT_TILT_MAX = 1.2;
+
+// Outward normal of each face, in cube coordinates.
+const FACE_NORMALS: Record<string, Vec3> = {
+  U: [0, 1, 0], D: [0, -1, 0], F: [0, 0, 1], B: [0, 0, -1], L: [-1, 0, 0], R: [1, 0, 0],
+};
+
+/** A sticker under a pointer-down: enough to turn a drag into a move. */
+interface Grab {
+  normal: Vec3;
+  pos: Vec3;
+  point: THREE.Vector3; // world-space hit point
+}
 
 // Internal colour index -> hex. Index order is U, L, F, R, B, D.
 const FACE_COLORS = [
@@ -165,10 +183,11 @@ const STICKER_FACES: {
 ];
 
 function Cubie({
-  x, y, z, n, state, res, onStickerClick,
+  x, y, z, n, state, res, onStickerClick, onStickerDown,
 }: {
   x: number; y: number; z: number; n: number; state: CubeState; res: Resources;
   onStickerClick?: (index: number) => void;
+  onStickerDown?: (grab: Grab) => void;
 }) {
   const pos = { x, y, z };
   const h = (n - 1) / 2;
@@ -181,6 +200,7 @@ function Cubie({
         // The plastic swallows clicks too, or a click in the gap between
         // stickers would carry on through the cube and paint the far side.
         onClick={onStickerClick && ((e) => e.stopPropagation())}
+        onPointerDown={onStickerDown && ((e) => e.stopPropagation())}
       />
       {STICKER_FACES.map((sf) =>
         sf.visible(pos, h) ? (
@@ -193,6 +213,10 @@ function Cubie({
             onClick={onStickerClick && ((e) => {
               e.stopPropagation(); // only the front-most sticker under the pointer
               if (e.delta <= CLICK_SLOP) onStickerClick(sf.face * n * n + sf.cell(pos, h, n));
+            })}
+            onPointerDown={onStickerDown && ((e) => {
+              e.stopPropagation();
+              onStickerDown({ normal: FACE_NORMALS[sf.key], pos: [x, y, z], point: e.point.clone() });
             })}
           />
         ) : null
@@ -240,7 +264,7 @@ function cubiePositions(n: number): Pos[] {
 }
 
 function CubeContent({
-  state, move, animDuration, onMoveComplete, autoRotate, autoRotateSpeed, onStickerClick,
+  state, move, animDuration, onMoveComplete, autoRotate, autoRotateSpeed, onStickerClick, onStickerDown, spinRef,
 }: {
   state: CubeState;
   move: string | null;
@@ -249,8 +273,10 @@ function CubeContent({
   autoRotate: boolean;
   autoRotateSpeed: number;
   onStickerClick?: (index: number) => void;
+  onStickerDown?: (grab: Grab) => void;
+  /** The whole-cube group; the wrapper orbits it and projects through it. */
+  spinRef: React.RefObject<THREE.Group>;
 }) {
-  const spinRef = useRef<THREE.Group>(null);
   const layerRef = useRef<THREE.Group>(null);
   const [animStart, setAnimStart] = useState<number | null>(null);
   const res = useCubeResources();
@@ -295,7 +321,7 @@ function CubeContent({
   const still = positions.filter((p) => !inLayer(p));
 
   const render = (p: Pos) => (
-    <Cubie key={`${p.x},${p.y},${p.z}`} x={p.x} y={p.y} z={p.z} n={n} state={state} res={res} onStickerClick={onStickerClick} />
+    <Cubie key={`${p.x},${p.y},${p.z}`} x={p.x} y={p.y} z={p.z} n={n} state={state} res={res} onStickerClick={onStickerClick} onStickerDown={onStickerDown} />
   );
 
   return (
@@ -319,23 +345,100 @@ export default function RubiksCube3D({
   animDuration = 400,
   onMoveComplete = () => {},
   onStickerClick,
+  onFaceTurn,
 }: Props) {
   const wrapperStyle: React.CSSProperties = fill
     ? { width: '100%', height: '100%' }
     : { width: size, height: size, margin: '0 auto' };
 
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const spinRef = useRef<THREE.Group>(null);
+  const cameraRef = useRef<THREE.Camera | null>(null);
+  // Set by a sticker's pointer-down, read by the wrapper's, which bubbles up
+  // right after. Anything else under the pointer leaves it null and orbits.
+  const grabRef = useRef<Grab | null>(null);
+  const faceTurnRef = useRef(onFaceTurn);
+  faceTurnRef.current = onFaceTurn;
+  const wantsFaceTurns = !!onFaceTurn;
+
+  // Orbit and face turns are plain pointer events on the wrapper, not
+  // OrbitControls: both would claim the same pointer-down and the controls
+  // cannot be told to let a sticker drag through.
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || (!interactive && !wantsFaceTurns)) return;
+    let drag: { x: number; y: number; grab: Grab | null } | null = null;
+
+    const move = (e: PointerEvent) => {
+      if (!drag || drag.grab || !spinRef.current) return;
+      const g = spinRef.current;
+      g.rotation.y += (e.clientX - drag.x) * ORBIT_RAD_PER_PX;
+      g.rotation.x = THREE.MathUtils.clamp(g.rotation.x + (e.clientY - drag.y) * ORBIT_RAD_PER_PX, -ORBIT_TILT_MAX, ORBIT_TILT_MAX);
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+    };
+    const up = (e: PointerEvent) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      if (!drag) return;
+      const { grab, x, y } = drag;
+      drag = null;
+      const camera = cameraRef.current;
+      const g = spinRef.current;
+      if (!grab || !camera || !g || e.type === 'pointercancel') return;
+      const dx = e.clientX - x;
+      const dy = e.clientY - y;
+      if (Math.hypot(dx, dy) < FACE_TURN_MIN_PX) return;
+      // How a cube-space direction at the grabbed sticker reads on screen.
+      const project = (dir: Vec3): [number, number] => {
+        const w = new THREE.Vector3(...dir).transformDirection(g.matrixWorld);
+        const p0 = grab.point.clone().project(camera);
+        const p1 = grab.point.clone().add(w).project(camera);
+        return [(p1.x - p0.x) * el.clientWidth, (p0.y - p1.y) * el.clientHeight];
+      };
+      const turn = resolveFaceTurn(grab, dx, dy, project);
+      if (turn) faceTurnRef.current?.(turn);
+    };
+    const down = (e: PointerEvent) => {
+      if (e.button !== 0 || drag) return;
+      const grab = wantsFaceTurns ? grabRef.current : null;
+      grabRef.current = null;
+      if (!grab && !interactive) return;
+      drag = { x: e.clientX, y: e.clientY, grab };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', up);
+    };
+
+    el.addEventListener('pointerdown', down);
+    return () => {
+      el.removeEventListener('pointerdown', down);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+  }, [interactive, wantsFaceTurns]);
+
   return (
     <div
-      style={{ ...wrapperStyle, cursor: onStickerClick ? 'pointer' : interactive ? 'grab' : 'default', touchAction: 'pan-y' }}
+      ref={wrapRef}
+      style={{
+        ...wrapperStyle,
+        cursor: onStickerClick ? 'pointer' : interactive ? 'grab' : 'default',
+        // Face turns need vertical drags too; otherwise leave vertical swipes to page scroll.
+        touchAction: wantsFaceTurns ? 'none' : 'pan-y',
+      }}
       role="img"
       aria-label="3D Rubik's Cube"
     >
       <Canvas
-        camera={{ position: [3.6, 3.2, 5.2], fov: 42 }}
+        camera={{ position: [4.1, 3.6, 5.9], fov: 42 }}
         // Uncapped device pixel ratio renders 9x the pixels on a 3x phone
         // screen for no visible gain.
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: true }}
+        onCreated={({ camera }) => { cameraRef.current = camera; }}
       >
         <ambientLight intensity={0.95} />
         {/* Key, fill and rim: enough separation to read the cube's form. */}
@@ -351,17 +454,9 @@ export default function RubiksCube3D({
           autoRotate={autoRotate}
           autoRotateSpeed={autoRotateSpeed}
           onStickerClick={onStickerClick}
+          onStickerDown={wantsFaceTurns ? (g) => { grabRef.current = g; } : undefined}
+          spinRef={spinRef}
         />
-
-        {interactive && (
-          <OrbitControls
-            enablePan={false}
-            enableZoom={false}
-            enableDamping
-            dampingFactor={0.08}
-            rotateSpeed={0.6}
-          />
-        )}
       </Canvas>
     </div>
   );

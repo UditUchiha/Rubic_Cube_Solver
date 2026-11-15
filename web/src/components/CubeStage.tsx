@@ -120,7 +120,8 @@ export default function CubeStage() {
     <main className="relative h-[100svh] min-h-[580px] overflow-hidden" onPointerDown={() => setTouched(true)}>
       {/* Text never catches drags; only the cube, links and the button take the pointer. */}
       <div className="pointer-events-none absolute inset-0 flex flex-col px-4 py-4 sm:px-8 sm:py-6 lg:px-12">
-        <header className="flex items-center gap-4">
+        {/* Above the canvas, which in landscape spans the full height behind the nav. */}
+        <header className="relative z-10 flex items-center gap-4">
           <Link href="/" className="pointer-events-auto flex items-center gap-3">
             <span aria-hidden className="colorbar h-3 w-9 rounded-[2px]" style={{ boxShadow: 'inset 0 0 0 1px var(--rule-strong)' }} />
             <span className="mono font-bold text-base sm:text-lg text-fg">Kubrick</span>
@@ -162,7 +163,7 @@ export default function CubeStage() {
           />
         </div>
 
-        <div className="mt-auto">
+        <div className="relative z-10 mt-auto">
           <div className="stage-notation mono" aria-label={line.moves.length ? `${line.kind}: ${line.moves.join(' ')}` : undefined}>
             {line.moves.length > 0 && (
               <>

@@ -118,22 +118,7 @@ export default function CubeStage() {
 
   return (
     <main className="relative h-[100svh] min-h-[580px] overflow-hidden" onPointerDown={() => setTouched(true)}>
-      <div className="stage-canvas">
-        <RubiksCube3D
-          fill
-          interactive
-          zoom={0.95}
-          autoRotate={!reduced && !touched}
-          autoRotateSpeed={9}
-          state={cube}
-          move={animating ? line.moves[cursor] : null}
-          animDuration={moveMs}
-          onMoveComplete={onMoveComplete}
-          onFaceTurn={onFaceTurn}
-        />
-      </div>
-
-      {/* Text sits over the canvas without catching drags; only links and the button take the pointer. */}
+      {/* Text never catches drags; only the cube, links and the button take the pointer. */}
       <div className="pointer-events-none absolute inset-0 flex flex-col px-4 py-4 sm:px-8 sm:py-6 lg:px-12">
         <header className="flex items-center gap-4">
           <Link href="/" className="pointer-events-auto flex items-center gap-3">
@@ -160,6 +145,21 @@ export default function CubeStage() {
           <p className="mt-4 max-w-[34ch] text-sm sm:text-base leading-relaxed" style={{ color: 'var(--muted)' }}>
             Drag a sticker to turn its face. Drag anywhere else to spin the cube.
           </p>
+        </div>
+
+        <div className="stage-canvas pointer-events-auto">
+          <RubiksCube3D
+            fill
+            interactive
+            zoom={0.95}
+            autoRotate={!reduced && !touched}
+            autoRotateSpeed={9}
+            state={cube}
+            move={animating ? line.moves[cursor] : null}
+            animDuration={moveMs}
+            onMoveComplete={onMoveComplete}
+            onFaceTurn={onFaceTurn}
+          />
         </div>
 
         <div className="mt-auto">

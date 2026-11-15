@@ -139,18 +139,19 @@ body {
 }
 
 /* ── Landing stage ───────────────────────────────────────────────────────── */
-/* The cube's canvas. Portrait: a square across the middle. Landscape: the
-   full height, right of the headline, so the cube is as large as the screen
-   allows without the text sitting on it. */
+/* The cube's canvas. Portrait: in the text's flow, taking whatever height the
+   headline and controls leave, edge to edge. Landscape: the full height, right
+   of the headline. Either way the cube is as large as the screen allows
+   without the text sitting on it. */
 .stage-canvas {
-  position: absolute;
-  left: 0; right: 0;
-  top: 53%;
-  height: min(100vw, 62svh);
-  transform: translateY(-50%);
+  position: relative;
+  flex: 1 1 0;
+  min-height: 180px;
+  width: 100vw;
+  margin: 0.5rem calc(50% - 50vw);
 }
 @media (min-aspect-ratio: 5/4) {
-  .stage-canvas { top: 0; bottom: 0; left: 34%; height: auto; transform: none; }
+  .stage-canvas { position: absolute; inset: 0 0 0 34%; width: auto; min-height: 0; margin: 0; }
 }
 
 .stage-headline {

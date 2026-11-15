@@ -24,6 +24,8 @@ interface Props {
   onStickerClick?: (index: number) => void;
   /** Called with the move a drag on a sticker asks for ("R", "U'"...). The caller animates it via `move`. */
   onFaceTurn?: (move: string) => void;
+  /** Camera zoom: 1 frames the cube with room to orbit, larger fills more of the canvas. */
+  zoom?: number;
 }
 
 // Pointer travel in px under which a press counts as a click, not a drag to orbit.
@@ -32,6 +34,7 @@ const CLICK_SLOP = 5;
 const FACE_TURN_MIN_PX = 18;
 const ORBIT_RAD_PER_PX = 0.008;
 const ORBIT_TILT_MAX = 1.2;
+const CAMERA_POSITION = [4.1, 3.6, 5.9];
 
 // Outward normal of each face, in cube coordinates.
 const FACE_NORMALS: Record<string, Vec3> = {
@@ -334,6 +337,7 @@ export default function RubiksCube3D({
   onMoveComplete = () => {},
   onStickerClick,
   onFaceTurn,
+  zoom = 1,
 }: Props) {
   const wrapperStyle: React.CSSProperties = fill
     ? { width: '100%', height: '100%' }
@@ -421,7 +425,7 @@ export default function RubiksCube3D({
       aria-label="3D Rubik's Cube"
     >
       <Canvas
-        camera={{ position: [4.1, 3.6, 5.9], fov: 42 }}
+        camera={{ position: CAMERA_POSITION.map((c) => c / zoom) as [number, number, number], fov: 42 }}
         // Uncapped device pixel ratio renders 9x the pixels on a 3x phone
         // screen for no visible gain.
         dpr={[1, 2]}

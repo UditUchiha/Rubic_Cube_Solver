@@ -138,6 +138,41 @@ body {
   .text-balance { text-wrap: balance; }
 }
 
+/* ── Landing stage ───────────────────────────────────────────────────────── */
+/* The cube's canvas. Portrait: a square across the middle. Landscape: the
+   full height, right of the headline, so the cube is as large as the screen
+   allows without the text sitting on it. */
+.stage-canvas {
+  position: absolute;
+  left: 0; right: 0;
+  top: 53%;
+  height: min(100vw, 62svh);
+  transform: translateY(-50%);
+}
+@media (min-aspect-ratio: 5/4) {
+  .stage-canvas { top: 0; bottom: 0; left: 34%; height: auto; transform: none; }
+}
+
+.stage-headline {
+  font-size: clamp(2.25rem, 5vw, 4.25rem);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  max-width: 11ch;
+  text-wrap: balance;
+}
+
+/* The notation the cube is executing: the page's second typographic voice. */
+.stage-notation {
+  font-size: clamp(1rem, 1.9vw, 1.6rem);
+  line-height: 1.5;
+  max-width: 60ch;
+  min-height: 2.5em;
+}
+/* Beside the cube rather than over it. */
+@media (min-aspect-ratio: 5/4) {
+  .stage-notation { max-width: calc(34vw - 1rem); }
+}
+
 /* Respect the OS "reduce motion" setting for every CSS animation and transition. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

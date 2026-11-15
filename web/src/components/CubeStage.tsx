@@ -177,7 +177,7 @@ export default function CubeStage() {
                         key={at}
                         className={clsx(
                           'inline-block min-w-[2ch] px-[0.1em] rounded-[2px] transition-colors',
-                          at < cursor && 'opacity-35',
+                          at < cursor && 'opacity-50',
                           at === cursor && pending && 'key-down'
                         )}
                       >
